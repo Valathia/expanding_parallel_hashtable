@@ -24,9 +24,6 @@ int n_els,n_threads;
 // inserts from tail
 // moves nodes 1 by 1 to new table 
 // working for insert, search, delete at the same time
-//sshfs
-//usar o benchmark do pedro no meu pc 1º  -- está no email
-
 
 //ALL STRUCTS --------------------------------------------------------------------------------------------------------------------
 typedef struct pair {
@@ -463,19 +460,3 @@ int main_hash(hashtable* b,int k, int v, void* id_ptr, int* r_n_elem, int flag) 
 
 
 //---------------------------------------------------------------------------------------------------------------
-
-
-
-
-//search/insert/delete estão todos na mesma função e a funcionar
-//é preciso: - mudar o nome das funções para fazer sentido - done
-//           - mudar a maneira como os testes são criados para fazer hits e misses, e escrever no ficheiro como inicialmente falado numero - instrução - falta hit e miss
-//           - usar o random para se o numero cair numa certa parte escolher a instrução - done
-//           - fazer uma pré inserção dos números a procurar/apagar em sequencial para poder correr em paralelo as 3 operações em simultâneo - done
-//           - verificar se posso alterar os read/write locks para nos searches serem read e nos inserts/delete write - done
-
-// -- ver como medir o tempo de trabalho só das threads, lançar as threads por si sí demora 10x mais que em serial a concluir as operações na table. 
-
-
-// preciso ver o numero dos cores e fazer pin as threads nos cores de performance 
-// -- wrapper cpp no codigo para ter o seu proprio namespace para poder usar a biblioteca dos lock free locks

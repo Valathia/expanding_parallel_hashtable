@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>
-// search
-// delete
+// search 0
+// delete 1
 // insert 2
 #if DEBUG
 
@@ -101,8 +101,8 @@ void *test_worker(void *entry_point)
     int* r_n_elem = (int*)calloc(sizeof(int),1);
 
 	for(int i=0; i<test_size/n_threads; i++){
-		size_t rng,
-		       value;
+		size_t	rng,
+		    	value;
 		lrand48_r(entry_point, (long int *) &rng);
 		value = rng * GOLD_RATIO;
 		if(rng < limit_sf){
