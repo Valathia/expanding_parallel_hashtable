@@ -1,0 +1,16 @@
+#os files
+.DS_Store
+.vscode/settings.json
+
+#old tests
+files/tests.sh
+files/serial.c
+files/generatecase.c
+
+#compiled files
+files/expht.o 
+files/libexpht.a
+files/nf-queue.c 
+
+#tests
+tests
