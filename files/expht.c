@@ -1,13 +1,12 @@
+#include "expht.h"
 #include <stdatomic.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
-#define TRESH 2
+#define TRESH 16
 
-
-int n_els,n_threads;
 //int* elements;
 //int* instructions;
 //int* results;
@@ -25,44 +24,6 @@ int n_els,n_threads;
 // moves nodes 1 by 1 to new table 
 // working for insert, search, delete at the same time
 
-//ALL STRUCTS --------------------------------------------------------------------------------------------------------------------
-typedef struct pair {
-    int key;
-    int val;
-}pair;
-
-typedef struct node {
-    pair data;
-    struct node* next;
-}node;
-
-typedef struct node_bucket{
-    pthread_rwlock_t lock_b;
-    node* first;
-}node_bucket;
-
-typedef struct hash_header {
-    pthread_rwlock_t lock;
-    int n_ele;
-    int n_buckets;
-}hash_header;
-
-typedef struct hashtable {
-    hash_header header;
-    node_bucket bucket;
-}hashtable;
-
-
-//------- VARIAVEIS GLOBAIS
-
-void* thread_main(void *id_ptr);
-void init_hash(void *id_ptr);
-void init_del(void* id_ptr);
-void init_search(void* id_ptr);
-hashtable* ht ;
-int* seeds;
-int delete_search_insert(hashtable* b,node* n, int flag, int* r_n_elem, void* id_ptr);
-void trie_search_insert(hashtable* ht,node* n, void* id_ptr, int* r_n_elem);
 
 //NODE functions--------------------------------------------------------------------------------------------------------------------
 //instancia um node*
@@ -174,11 +135,11 @@ int hash(int key, int size) {
 hashtable* create_table(int s) {
     hashtable* h = (hashtable*)calloc(sizeof(hash_header) + sizeof(node_bucket)*s,1);
     h->header.n_buckets = s;
-    pthread_rwlock_init(&h->header.lock, NULL);
+    LOCK_INIT(&h->header.lock, NULL);
     h->header.n_ele = 0;
     for(int i = 0; i<s; i++) {
         (&h->bucket)[i].first = (void*)h;
-        pthread_rwlock_init(&(&h->bucket)[i].lock_b, NULL);
+        LOCK_INIT(&(&h->bucket)[i].lock_b, NULL);
     }
     return h;
 }
@@ -204,6 +165,15 @@ void imprimir_hash(hashtable* ht) {
 }
 
 
+//data structure to keep hashtable head pointer to use the benchmark
+access* create_acess(int s) {
+    access* entry = (access*) calloc(sizeof(access),1);
+    entry->ht = create_table(s);
+
+    return entry;
+}
+
+
 //---------------------------------------------------------------------------------------------------------------
 
 //Verifica condição de expansão actualmente:
@@ -219,20 +189,20 @@ void bucket_transfer(node* n, hashtable* b, hashtable* old, void* id_ptr, int* r
         }
 
         int h = hash(n->data.key,b->header.n_buckets);
-        pthread_rwlock_t* bucket_lock = &(&b->bucket)[h].lock_b;
-        pthread_rwlock_wrlock(bucket_lock);
-        pthread_rwlock_t* old = (pthread_rwlock_t*)calloc(sizeof(pthread_rwlock_t),1);
+        LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
+        WRITE_LOCK(bucket_lock);
+        LOCKS* old = (LOCKS*)calloc(sizeof(LOCKS),1);
 
         if((&b->bucket)[h].first == (void*)b) {
 
             n->next = (&b->bucket)[h].first;
             (&b->bucket)[h].first = n;
-            pthread_rwlock_wrlock(&b->header.lock);
+            WRITE_LOCK(&b->header.lock);
             if (b->header.n_ele>-1) {
                 b->header.n_ele++;
             }
-            pthread_rwlock_unlock(&b->header.lock);
-            pthread_rwlock_unlock(bucket_lock);
+            UNLOCK(&b->header.lock);
+            UNLOCK(bucket_lock);
             *r_n_elem = 1;
             return;
         }
@@ -245,140 +215,202 @@ void bucket_transfer(node* n, hashtable* b, hashtable* old, void* id_ptr, int* r
 
             old = bucket_lock;
             bucket_lock = &(&b->bucket)[h].lock_b;
-            pthread_rwlock_wrlock(bucket_lock);
-            pthread_rwlock_unlock(old);  
+            WRITE_LOCK(bucket_lock);
+            UNLOCK(old);  
         }
         
         n->next = (&b->bucket)[h].first;
         (&b->bucket)[h].first = n;
         
-        pthread_rwlock_unlock(bucket_lock);
+        UNLOCK(bucket_lock);
 
-        pthread_rwlock_wrlock(&b->header.lock);
+        WRITE_LOCK(&b->header.lock);
         if (b->header.n_ele>-1) {
             b->header.n_ele++;
         }
-        pthread_rwlock_unlock(&b->header.lock);
+        UNLOCK(&b->header.lock);
         return;
     }
     return;
 }
 
 //função do paper que ajusta os nodes -> passa o marking node para o fim de cada bucket. 
-void adjustNodes(node* n, hashtable* b,hashtable* old, void* id_ptr,int* r_n_elem) {
+void adjustNodes(node* n, hashtable* b,hashtable* old, void* id_ptr) {
 
     if (n != (void*)old && !is_bucket_array(n)) { 
         node* chain = n;
         if ( chain->next != (void*)old && chain->next != (void*)b && !is_bucket_array(chain->next)) {
-            adjustNodes(chain->next,b,old,id_ptr,r_n_elem);
+            adjustNodes(chain->next,b,old,id_ptr);
         }
         
-        delete_search_insert(b,chain,2,r_n_elem,id_ptr);
-
+        insert(b,chain,id_ptr);
         return;
     }
     return;
 }
 
 
-// função de search para verificar se a key já existe na hashtable
-// faz uso da função de pesquisa 
-// as locks pareciam estar erradas troquei a read para  a pos 0 e write para pos 1
-int delete_search_insert(hashtable* b,node* n, int flag, int* r_n_elem, void* id_ptr){
-    int h = hash(n->data.key,b->header.n_buckets);
-    int (*locks[])(pthread_rwlock_t*) = {pthread_rwlock_rdlock,pthread_rwlock_wrlock,pthread_rwlock_wrlock};
 
-    pthread_rwlock_t* bucket_lock = &(&b->bucket)[h].lock_b;
-    
-    locks[flag](bucket_lock);
-    
-    if((&b->bucket)[h].first == (void*)b) {
-        if(flag!=2) {
-            pthread_rwlock_unlock(bucket_lock);
-            return 0;
-        }
-        else {
-            n->next = (&b->bucket)[h].first;
-            (&b->bucket)[h].first = n;
-            locks[flag](&b->header.lock);
-            if (b->header.n_ele>-1) {
-                b->header.n_ele++;
-            }
-            pthread_rwlock_unlock(&b->header.lock);
-            pthread_rwlock_unlock(bucket_lock);
-            *r_n_elem = 1;
-            return 1;
-        }
-    }
+hashtable* find_bucket_read(hashtable* b,int value) {
+    int h = hash(value,b->header.n_buckets);
+    LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
+    READ_LOCK(bucket_lock);
 
+    //if bucket is pointing towards a new table, keep going until we find the bucket of the current hashtable
     while(is_bucket_array((&b->bucket)[h].first)) {
 
         b = (void *)((uint64_t)(&b->bucket)[h].first & ~(1<<0));
 
-        h = hash(n->data.key,b->header.n_buckets);
+        h = hash(value,b->header.n_buckets);
 
-        pthread_rwlock_unlock(bucket_lock);
+        //old = bucket_lock;
+        UNLOCK(bucket_lock);
         bucket_lock = &(&b->bucket)[h].lock_b;
-        locks[flag](bucket_lock);
+        READ_LOCK(bucket_lock);
+        //UNLOCK(old);  
     }
 
-    node* first = (&b->bucket)[h].first;
-    node* prev = first;
-    int count = 1;
+    return b;
+}
 
-    while(first != (void*)b) {
-        if(first->data.key == n->data.key) {
-            if(flag==0){
-                pthread_rwlock_unlock(bucket_lock);  
-                return 1;
-            }
-            else if (flag==1) {
-                if(first == prev) {
-                    (&b->bucket)[h].first = first->next;
-                }
-                else {
-                    prev->next = first->next;
-                }
-                pthread_rwlock_unlock(bucket_lock);
-                pthread_rwlock_wrlock(&b->header.lock);
-                if (b->header.n_ele>0) {
-                    b->header.n_ele--;
-                }
-                pthread_rwlock_unlock(&b->header.lock);
-                return 1;
-            }
-        }
-        count++;
-        prev = first;
-        first = first->next;
+hashtable* find_bucket_write(hashtable* b,int value) {
+    int h = hash(value,b->header.n_buckets);
+    LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
+    WRITE_LOCK(bucket_lock);
+
+    //if bucket is pointing towards a new table, keep going until we find the bucket of the current hashtable
+    while(is_bucket_array((&b->bucket)[h].first)) {
+
+        b = (void *)((uint64_t)(&b->bucket)[h].first & ~(1<<0));
+
+        h = hash(value,b->header.n_buckets);
+
+        //old = bucket_lock;
+        UNLOCK(bucket_lock);
+        bucket_lock = &(&b->bucket)[h].lock_b;
+        WRITE_LOCK(bucket_lock);
+        //UNLOCK(old);  
     }
 
-    if(flag==2) {
-        if(count==1) {
-            n->next = (&b->bucket)[h].first;
-            (&b->bucket)[h].first = n;
+    return b;
+}
+
+int search(hashtable* b,int value, void* id_ptr) {
+
+    //get current hashtable where correct bucket is
+    b = find_bucket_read(b,value);
+    int h = hash(value,b->header.n_buckets);
+    LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
+    
+    node* cur = (&b->bucket)[h].first;
+    node* prev = cur;
+
+    //if bucket where value should be is empty, return 0
+    while(cur != (void*)b) {
+        if(cur->data.key == value) {
+            UNLOCK(bucket_lock);  
+            return 1;
         }
-        else {
-            n->next = prev->next;
-            prev->next = n;
-        }
-        pthread_rwlock_unlock(bucket_lock);
-        pthread_rwlock_wrlock(&b->header.lock);
-        if (b->header.n_ele>-1) {
-            b->header.n_ele++;
-        }
-        pthread_rwlock_unlock(&b->header.lock);
-        *r_n_elem = count;
-        return 1;
+        prev = cur;
+        cur = cur->next;
     }
-
-    pthread_rwlock_unlock(bucket_lock); 
-
+    
+    UNLOCK(bucket_lock);  
     return 0;
 }
 
+int insert(hashtable* b, node* n, void* id_ptr) {
+    
+    int value = n->data.key;
+
+    b = find_bucket_write(b,value);
+    int h = hash(value,b->header.n_buckets);
+    LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
+
+
+    node* cur = (&b->bucket)[h].first;
+    node* prev = cur;
+
+    int count = 1;
+
+    //get to end of bucket array
+    while(cur != (void*)b) {
+        //can't insert, value already exists
+        if(cur->data.key == value) {
+            UNLOCK(bucket_lock);  
+            return 0;
+        }
+        prev = cur;
+        cur = cur->next;
+        count ++;
+    }
+
+
+    if(count==1) {
+        n->next = (&b->bucket)[h].first;
+        (&b->bucket)[h].first = n;
+    }
+    else {
+        n->next = prev->next;
+        prev->next = n;
+    }
+
+    //unlock search lock
+    UNLOCK(bucket_lock);  
+
+    WRITE_LOCK(&b->header.lock);
+    //only update if an expansion hasn't begun
+    if (b->header.n_ele>-1) {
+        b->header.n_ele++;
+    }
+    UNLOCK(&b->header.lock);
+
+    return count;
+}
+
+int delete(hashtable* b,int value, void* id_ptr) {
+    b = find_bucket_write(b,value);
+    int h = hash(value,b->header.n_buckets);
+    LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
+    
+
+    node* cur = (&b->bucket)[h].first;
+    node* prev = cur;
+    
+    while(cur != (void*)b) {
+        if(cur->data.key == value) {
+            //if node to delete is first
+            if(cur == prev) {
+                (&b->bucket)[h].first = cur->next;
+            }
+            else {
+                prev->next = cur->next;
+            }
+            UNLOCK(bucket_lock);
+
+            WRITE_LOCK(&b->header.lock);
+            //only write if no expansion is occuring
+            if (b->header.n_ele>0) {
+                b->header.n_ele--;
+            }
+            UNLOCK(&b->header.lock);
+            return 1;
+        }
+
+        prev = cur;
+        cur = cur->next;
+    }
+
+    //couldn't find value to delete
+    UNLOCK(bucket_lock);  
+    return 0;
+}
+
+
+
+
 // função de hash expansion
-hashtable* HashExpansion(hashtable* b, void* id_ptr,int* r_n_elem) {
+hashtable* HashExpansion(hashtable* b, void* id_ptr) {
     hashtable* oldB = b;
     int oldK = b->header.n_buckets;
     int newK = 2*oldK;
@@ -389,16 +421,16 @@ hashtable* HashExpansion(hashtable* b, void* id_ptr,int* r_n_elem) {
     while (i < oldK) {
 
         //substituir o cas por um if
-        pthread_rwlock_wrlock(&((&oldB->bucket)[i].lock_b));
+        WRITE_LOCK(&((&oldB->bucket)[i].lock_b));
         
         if ((&oldB->bucket)[i].first != (void*)b) { //&& (&oldB->bucket)[i].first != node_mask
             
-            adjustNodes((&oldB->bucket)[i].first,newB,oldB,id_ptr,r_n_elem);
+            adjustNodes((&oldB->bucket)[i].first,newB,oldB,id_ptr);
             
         }  
 
         (&oldB->bucket)[i].first = node_mask;
-        pthread_rwlock_unlock(&((&oldB->bucket)[i].lock_b));
+        UNLOCK(&((&oldB->bucket)[i].lock_b));
 
         i++;
     }
@@ -408,54 +440,45 @@ hashtable* HashExpansion(hashtable* b, void* id_ptr,int* r_n_elem) {
 
 // função que faz handle do processo de insert
 // e que dá inicio À expansão quando necessário
-//os prints comentados nesta função são usados para fazer debuging. 
-int main_hash(hashtable* b,int k, int v, void* id_ptr, int* r_n_elem, int flag) {
-
-    node* n = inst_node(k,v,b);
-
-    if(delete_search_insert(b,n,flag,r_n_elem,id_ptr)) {
-        if(flag!=2) {
-            return 1;
-        }
-    }
-    else {
-        return 0;
-    }
-
-    
+// os prints comentados nesta função são usados para fazer debuging. 
+int main_hash(access* pointer,int value, void* id_ptr) {
+    hashtable* b = pointer->ht;
+    node* n = inst_node(value,(int)id_ptr,b);
+    int chain_size = insert(b,n,id_ptr);
     //quando uma thread insere uma key, se quando entrou o n_elem != -1 e quando sai é ==-1,
     //isto quer dizer que a table expandiu após a inserção, no mommento de expansão
     //à uma recontagem dos elementos à medida que são ajustados na nova tabela
     //logo, a thread não pode aumentar o nr de elementos visto que já foi contado pela expansão
     // se quando entrou o n_ele == -1, o mecanismo que lida com isso está na função de inserção 
     // se quando voltou o valor é !=-1, deve incrementar e verificar se precisa de ser expandida. 
-    
 
-    pthread_rwlock_wrlock(&b->header.lock);
+    WRITE_LOCK(&b->header.lock);
 
-    if((*r_n_elem > TRESH) && (b->header.n_ele > b->header.n_buckets)) { 
-
-        b->header.n_ele = -1;
-            pthread_rwlock_unlock(&b->header.lock);
+    if((chain_size > TRESH) && (b->header.n_ele > b->header.n_buckets)) { 
+            b->header.n_ele = -1;
+            UNLOCK(&b->header.lock);
             hashtable* oldb = b;
-            b = HashExpansion(b,id_ptr,r_n_elem);
+            b = HashExpansion(b,id_ptr);
             
-            pthread_rwlock_wrlock(&oldb->header.lock);
+            WRITE_LOCK(&oldb->header.lock);
+            //signal expansion is finished
             oldb->header.n_ele = -2;
-            pthread_rwlock_unlock(&oldb->header.lock);
+            UNLOCK(&oldb->header.lock);
 
-            oldb = ht;
-            pthread_rwlock_wrlock(&oldb->header.lock);
-            if (ht->header.n_buckets < b->header.n_buckets) {
-                ht = b;
+            oldb = pointer->ht;
+            WRITE_LOCK(&oldb->header.lock);
+            if (pointer->ht->header.n_buckets < b->header.n_buckets) {
+                pointer->ht = b;
             }
-            pthread_rwlock_unlock(&oldb->header.lock);
+            UNLOCK(&oldb->header.lock);
             return 1;
     }
 
-    pthread_rwlock_unlock(&b->header.lock);
+    UNLOCK(&b->header.lock);
     return 1;
 }
+
+
 
 
 

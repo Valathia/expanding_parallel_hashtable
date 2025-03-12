@@ -1,6 +1,6 @@
 #os files
 .DS_Store
-.vscode/settings.json
+.vscode
 
 #old tests
 files/tests.sh
@@ -11,6 +11,11 @@ files/generatecase.c
 files/expht.o 
 files/libexpht.a
 files/nf-queue.c 
+files/expht_old.c 
+files/test.*
+files/test_size
+files/test
 
 #tests
 tests
+old_struct
