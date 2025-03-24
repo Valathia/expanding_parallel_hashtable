@@ -19,3 +19,8 @@ files/test
 #tests
 tests
 old_struct
+
+#data crunching
+data/
+files/run_.sh
+*.xlsx

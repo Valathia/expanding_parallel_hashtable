@@ -33,8 +33,8 @@ typedef struct node {
 }node;
 
 typedef struct node_bucket{
-    LOCKS lock_b;
-    node* first;
+    LOCKS lock_b; 
+    node* first; 
 }node_bucket;
 
 typedef struct hash_header {
@@ -49,6 +49,8 @@ typedef struct hashtable {
     node_bucket bucket;
 }hashtable;
 
+
+// struct to 
 typedef struct access {
     hashtable* ht;
     int thread_count;
@@ -56,7 +58,7 @@ typedef struct access {
 
 hashtable* create_table(int s);
 access* create_acess(int s);
-//
+
 
 //int main_hash(hashtable* b,int k, int v, void* id_ptr, int* r_n_elem, int flag);
 int main_hash(access* entry,int value, void* id_ptr);

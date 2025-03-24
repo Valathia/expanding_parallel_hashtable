@@ -106,15 +106,19 @@ void *test_worker(void *entry_point)
 		lrand48_r(entry_point, (long int *) &rng);
 		value = rng * GOLD_RATIO;
 		if(rng < limit_sf){
+			//hit
 			assert(search(entry->ht,value,entry_point)==1);
 		}
 		else if(rng < limit_r){
+			//delete
 			assert(search(entry->ht,value,entry_point)==0);
 		}
 		else if(rng < limit_i){
+			//insert
 			assert(search(entry->ht,value,entry_point)==1);
 		}
 		else{
+			//miss
 			assert(search(entry->ht,value,entry_point)==0);
 		}
 	}
