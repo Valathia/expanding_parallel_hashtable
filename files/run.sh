@@ -5,6 +5,10 @@ LOCK=$1
 N_TEST=$2
 N_ELEM=$3
 
+#add 1 test, 1st test is always thrown out
+N_TEST=$(( $N_TEST + 1 ))
+
+
 if [ $LOCK -ne 0 ]
 then
     #MUTEX 
