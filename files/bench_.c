@@ -1,27 +1,40 @@
 //#include <lfht.h>
-#include "expht.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
+//#include <stdio.h>
+//#include <stdlib.h>
+//#include <pthread.h>
 #include <time.h>
-// search 0
-// delete 1
-// insert 2
+
+// version flag = 3 -> d
+// version flag = 2 -> c
+// version flag = 1 -> b
+// version flag = 0 -> a
+
 #if DEBUG
 
 #include <assert.h>
 
 #endif
 
+#if VERSION == 1
+	#include "expht_b.h"
+#elif VERSION == 2
+	#include "expht_c.h"
+#elif VERSION ==3 
+	#include "expht_d.h"
+#else 
+	#include "expht_a.h" 
+#endif
+
+
+
 #define GOLD_RATIO 11400714819323198485ULL
 #define LRAND_MAX (1ULL<<31)
-#define INIT_SIZE 15624		// initial size of hashtable to avoid thread colision ( 1mbyte 15625 but 15624 mod 4 = 0)
+#define INIT_SIZE 16384		// (2^14) initial size of hashtable to avoid thread colision -- must be base 2 for hashing
 
 
 size_t	limit_sf,
     	limit_r,
     	limit_i;
-
 
 int test_size,
     n_threads;
@@ -33,17 +46,20 @@ access* entry ;
 void *prepare_worker(void *entry_point)
 {
 
+	int64_t thread_id = get_thread_id(entry);
+
 	//int thread_id = lfht_init_thread(head);
 	//printf("test size: %d # threads: %d\n",test_size,n_threads);
 	for(int i=0; i<test_size/n_threads; i++){
 		size_t rng,
                 value;
+		//isto aqui estava como long int
 		lrand48_r(entry_point, (long int *) &rng);
 		value = rng * GOLD_RATIO;
 		//printf("value: %d table size: %d \n",value,entry->ht->header.n_buckets);
 		if(rng < limit_r)
             // 		 ht, key, value, id_ptr, elem, instruction...
-			main_hash(entry,value,entry_point);
+			main_hash(entry,value,thread_id);
 			//lfht_insert(head, value, (void*)value, thread_id);
 	}
 	//lfht_end_thread(head, thread_id);
@@ -52,42 +68,91 @@ void *prepare_worker(void *entry_point)
 
 void *bench_worker(void *entry_point)
 {
+
 	//int thread_id = lfht_init_thread(head);
 	int thread_limit = test_size/n_threads;
     //int* r_n_elem = (int*)calloc(sizeof(int),1);
+	int64_t thread_id = get_thread_id(entry);
 
 	for(int i=0; i<thread_limit; i++){
 		size_t	rng,
 		    	value;
 		lrand48_r(entry_point, (long int *) &rng);
 		value = rng * GOLD_RATIO;
+		//printf("value: %llu rng: %llu limit_sf: %llu limit_r: %llu limit_i: %llu \n", value, rng, limit_sf, limit_r, limit_i);
 		if(rng < limit_sf){
 
 #if DEBUG
-			//assert((size_t)lfht_search(head, value, thread_id)==value);
-			assert(search(entry->ht,value,entry_point)==1);
+//			assert(search(entry->ht,value,entry_point)==1);
+
+			#if VERSION 
+
+			assert(search(entry,value,thread_id)==1);
+		
+			#else
+		
+			assert(search(entry->ht,value,thread_id)==1);
+		
+			#endif
 #else
-			//lfht_search(head, value, thread_id);
-			search(entry->ht,value,entry_point);
+
+			//search(entry->ht,value,thread_id);
+
+			#if VERSION 
+
+			search(entry,value,thread_id);
+		
+			#else
+		
+			search(entry->ht,value,thread_id);
+		
+			#endif
 
 #endif
 		}
 		else if(rng < limit_r){
 			//lfht_remove(head, value, thread_id);
-            //main_hash(ht,value,value%test_size,entry_point,r_n_elem,1);
-			delete(entry->ht,value,entry_point);
+            //main_hash(ht,value,value%test_size,thread_id,r_n_elem,1);
+			//delete(entry->ht,value,thread_id);
+
+			#if VERSION 
+
+			delete(entry,value,thread_id);
+		
+			#else
+		
+			delete(entry->ht,value,thread_id);
+		
+			#endif
 		}
 		else if(rng < limit_i){
-			//lfht_insert(head, value, (void*)value, thread_id);
-			main_hash(entry,value,entry_point);
+			main_hash(entry,value,thread_id);
 		}
 		else{
 #if DEBUG
-			//assert(lfht_search(head, value, thread_id) == NULL);
-			assert(search(entry->ht,value,entry_point)==0);
+
+			//assert(search(entry->ht,value,thread_id)==0);
+
+			#if VERSION 
+
+			assert(search(entry,value,thread_id)==0);
+		
+			#else
+		
+			assert(search(entry->ht,value,thread_id)==0);
+		
+			#endif
 #else
-			//lfht_search(head, value, thread_id);
-			search(entry->ht,value,entry_point);
+			//search(entry->ht,value,thread_id);
+			#if VERSION 
+
+			search(entry,value,thread_id);
+		
+			#else
+		
+			search(entry->ht,value,thread_id);
+		
+			#endif
 #endif
 		}
 	}
@@ -98,28 +163,50 @@ void *bench_worker(void *entry_point)
 void *test_worker(void *entry_point)
 {
 	//int thread_id = lfht_init_thread(head);
-    //int* r_n_elem = (int*)calloc(sizeof(int),1);
 
-	for(int i=0; i<test_size/n_threads; i++){
-		size_t	rng,
-		    	value;
+	int64_t thread_id = get_thread_id(entry);
+
+	for(int64_t i=0; i<test_size/n_threads; i++){
+		size_t	rng, value;
+
 		lrand48_r(entry_point, (long int *) &rng);
 		value = rng * GOLD_RATIO;
 		if(rng < limit_sf){
 			//hit
-			assert(search(entry->ht,value,entry_point)==1);
+			//assert(search(entry->ht,value,thread_id)==1);
+
+			#if VERSION 
+				assert(search(entry,value,thread_id)==1);
+			#else
+				assert(search(entry->ht,value,thread_id)==1);
+			#endif
 		}
 		else if(rng < limit_r){
 			//delete
-			assert(search(entry->ht,value,entry_point)==0);
+			//assert(search(entry->ht,value,thread_id)==0);
+			#if VERSION 
+				assert(search(entry,value,thread_id)==0);
+			#else
+				assert(search(entry->ht,value,thread_id)==0);
+			#endif
 		}
 		else if(rng < limit_i){
 			//insert
-			assert(search(entry->ht,value,entry_point)==1);
+			//assert(search(entry->ht,value,thread_id)==1);
+			#if VERSION 
+				assert(search(entry,value,thread_id)==1);
+			#else
+				assert(search(entry->ht,value,thread_id)==1);
+			#endif
 		}
 		else{
 			//miss
-			assert(search(entry->ht,value,entry_point)==0);
+			//assert(search(entry->ht,value,thread_id)==0);
+			#if VERSION 
+				assert(search(entry,value,thread_id)==0);
+			#else
+				assert(search(entry->ht,value,thread_id)==0);
+			#endif
 		}
 	}
 	//lfht_end_thread(head, thread_id);
@@ -160,39 +247,40 @@ int main(int argc, char **argv)
 	
 	struct drand48_data **seed = malloc(n_threads*sizeof(struct drand48_data *));
 
-	//head = init_lfht(n_threads);
-	entry = create_acess(INIT_SIZE);
-    //ht = create_table(INIT_SIZE);
+
+	entry = create_acess(INIT_SIZE,n_threads);
+
 	//printf("Table created\n");
 	
-	for(int i=0; i<n_threads; i++)
+	for(int64_t i=0; i<n_threads; i++)
 		seed[i] = aligned_alloc(64, 64);
 	
 	//printf("seeded \n");
 
 	if(limit_r!=0){
-		for(int i=0; i<n_threads; i++){
+		for(int64_t i=0; i<n_threads; i++){
 			srand48_r(i, seed[i]);
 			pthread_create(&threads[i], NULL, prepare_worker, seed[i]);
 		}
-		for(int i=0;i<n_threads; i++){
+		for(int64_t i=0;i<n_threads; i++){
 			pthread_join(threads[i], NULL);
 		}
 	}
 	
 	printf("starting test\n");
+	entry->header.thread_id = 0;
 	
 	//imprimir_hash(ht);
 
 	clock_gettime(CLOCK_MONOTONIC_RAW, &start_monoraw);
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_process);
 	
-	for(int i=0; i<n_threads; i++){
+	for(int64_t i=0; i<n_threads; i++){
 		srand48_r(i, seed[i]);
 		pthread_create(&threads[i], NULL, bench_worker, seed[i]);
 	}
 	
-	for(int i=0; i<n_threads; i++)
+	for(int64_t i=0; i<n_threads; i++)
 		pthread_join(threads[i], NULL);
 	
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_monoraw);
@@ -204,14 +292,17 @@ int main(int argc, char **argv)
 	time = end_process.tv_sec - start_process.tv_sec + ((end_process.tv_nsec - start_process.tv_nsec)/1000000000.0);
 	printf("Process time: %lf\n", time);
 
-	//imprimir_hash(ht);
+	//imprimir_hash(entry->ht);
 
 #if DEBUG
-	for(int i=0; i<n_threads; i++){
+
+	entry->header.thread_id = 0;
+
+	for(int64_t i=0; i<n_threads; i++){
 		srand48_r(i, seed[i]);
 		pthread_create(&threads[i], NULL, test_worker, seed[i]);
 	}
-	for(int i=0; i<n_threads; i++){
+	for(int64_t i=0; i<n_threads; i++){
 		pthread_join(threads[i], NULL);
 	}
 	printf("Correct!\n");

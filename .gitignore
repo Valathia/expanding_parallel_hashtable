@@ -4,12 +4,10 @@
 
 #old tests
 files/tests.sh
-files/serial.c
-files/generatecase.c
 
 #compiled files
-files/expht.o 
-files/libexpht.a
+files/*.o 
+files/*.a
 files/nf-queue.c 
 files/expht_old.c 
 files/test.*
@@ -19,8 +17,20 @@ files/test
 #tests
 tests
 old_struct
+old_test_files
+files/expht_z.*
+files/expht_z
+files/leap_test.sh
+files/run__.sh
+files/test_b.sh
+files/bench_c.c 
+files/run_leap.sh
+files/jemalloc_test
+files/jemalloc_test.c 
+files/test_macro.c
 
 #data crunching
 data/
 files/run_.sh
 *.xlsx
+/sibila/
