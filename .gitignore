@@ -8,27 +8,16 @@ files/tests.sh
 #compiled files
 files/*.o 
 files/*.a
-files/nf-queue.c 
-files/expht_old.c 
-files/test.*
-files/test_size
-files/test
 
 #tests
 tests
 old_struct
 old_test_files
-files/expht_z.*
-files/expht_z
-files/leap_test.sh
-files/run__.sh
-files/test_b.sh
-files/bench_c.c 
-files/run_leap.sh
-files/jemalloc_test
-files/jemalloc_test.c 
-files/test_macro.c
-
+files_leap
+old_test_bench
+decomissioned structs
+files/clean_tests.sh 
+small_tests
 #data crunching
 data/
 files/run_.sh

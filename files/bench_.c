@@ -19,13 +19,13 @@
 	#include "expht_b.h"
 #elif VERSION == 2
 	#include "expht_c.h"
-#elif VERSION ==3 
+#elif VERSION == 3 
 	#include "expht_d.h"
+#elif VERSION == 4
+	#include "expht_e.h"
 #else 
 	#include "expht_a.h" 
 #endif
-
-
 
 #define GOLD_RATIO 11400714819323198485ULL
 #define LRAND_MAX (1ULL<<31)
@@ -71,7 +71,7 @@ void *bench_worker(void *entry_point)
 
 	//int thread_id = lfht_init_thread(head);
 	int thread_limit = test_size/n_threads;
-    //int* r_n_elem = (int*)calloc(sizeof(int),1);
+
 	int64_t thread_id = get_thread_id(entry);
 
 	for(int i=0; i<thread_limit; i++){
@@ -85,28 +85,12 @@ void *bench_worker(void *entry_point)
 #if DEBUG
 //			assert(search(entry->ht,value,entry_point)==1);
 
-			#if VERSION 
-
 			assert(search(entry,value,thread_id)==1);
-		
-			#else
-		
-			assert(search(entry->ht,value,thread_id)==1);
-		
-			#endif
 #else
 
 			//search(entry->ht,value,thread_id);
 
-			#if VERSION 
-
 			search(entry,value,thread_id);
-		
-			#else
-		
-			search(entry->ht,value,thread_id);
-		
-			#endif
 
 #endif
 		}
@@ -114,16 +98,7 @@ void *bench_worker(void *entry_point)
 			//lfht_remove(head, value, thread_id);
             //main_hash(ht,value,value%test_size,thread_id,r_n_elem,1);
 			//delete(entry->ht,value,thread_id);
-
-			#if VERSION 
-
 			delete(entry,value,thread_id);
-		
-			#else
-		
-			delete(entry->ht,value,thread_id);
-		
-			#endif
 		}
 		else if(rng < limit_i){
 			main_hash(entry,value,thread_id);
@@ -131,28 +106,12 @@ void *bench_worker(void *entry_point)
 		else{
 #if DEBUG
 
-			//assert(search(entry->ht,value,thread_id)==0);
-
-			#if VERSION 
-
 			assert(search(entry,value,thread_id)==0);
-		
-			#else
-		
-			assert(search(entry->ht,value,thread_id)==0);
-		
-			#endif
+
 #else
-			//search(entry->ht,value,thread_id);
-			#if VERSION 
 
 			search(entry,value,thread_id);
-		
-			#else
-		
-			search(entry->ht,value,thread_id);
-		
-			#endif
+
 #endif
 		}
 	}
@@ -175,38 +134,19 @@ void *test_worker(void *entry_point)
 			//hit
 			//assert(search(entry->ht,value,thread_id)==1);
 
-			#if VERSION 
-				assert(search(entry,value,thread_id)==1);
-			#else
-				assert(search(entry->ht,value,thread_id)==1);
-			#endif
+			assert(search(entry,value,thread_id)==1);
 		}
 		else if(rng < limit_r){
 			//delete
-			//assert(search(entry->ht,value,thread_id)==0);
-			#if VERSION 
-				assert(search(entry,value,thread_id)==0);
-			#else
-				assert(search(entry->ht,value,thread_id)==0);
-			#endif
+			assert(search(entry,value,thread_id)==0);
 		}
 		else if(rng < limit_i){
 			//insert
-			//assert(search(entry->ht,value,thread_id)==1);
-			#if VERSION 
-				assert(search(entry,value,thread_id)==1);
-			#else
-				assert(search(entry->ht,value,thread_id)==1);
-			#endif
+			assert(search(entry,value,thread_id)==1);
 		}
 		else{
 			//miss
-			//assert(search(entry->ht,value,thread_id)==0);
-			#if VERSION 
-				assert(search(entry,value,thread_id)==0);
-			#else
-				assert(search(entry->ht,value,thread_id)==0);
-			#endif
+			assert(search(entry,value,thread_id)==0);
 		}
 	}
 	//lfht_end_thread(head, thread_id);
