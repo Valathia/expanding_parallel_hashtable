@@ -23,6 +23,8 @@
 	#include "expht_d.h"
 #elif VERSION == 4
 	#include "expht_e.h"
+#elif VERSION == 5
+	#include "expht_f.h"
 #else 
 	#include "expht_a.h" 
 #endif

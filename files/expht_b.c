@@ -127,6 +127,7 @@ hashtable* create_table(int64_t s) {
     h->header.n_buckets = s;
     LOCK_INIT(&h->header.lock, NULL);
     h->header.n_ele = 0;
+    h->header.mode = 0;
     for(int64_t i = 0; i<s; i++) {
         (&h->bucket)[i].first = (void*)h;
         LOCK_INIT(&(&h->bucket)[i].lock_b, NULL);
@@ -162,9 +163,11 @@ access* create_acess(int64_t s, int64_t n_threads) {
 
     entry->header.thread_id = 0;
     LOCK_INIT( &entry->header.lock, NULL);
-    for(int64_t i=0; i<64; i++) {
+    for(int64_t i=0; i<MAXTHREADS; i++) {
         //printf("header counter %ld : %p = 0 \n",i, &entry->header.insert_count[i]);
-        entry->header.insert_count[i] = 0;
+        entry->header.insert_count[i].count = 0;
+        entry->header.insert_count[i].ops = 0;
+        entry->header.insert_count[i].header = s;
     }
 
     return entry;
@@ -235,13 +238,15 @@ hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
 
     // update header once with node count
     WRITE_LOCK(&newB->header.lock);
-        if(newB->header.n_ele > -1) {
+        if(!(newB->header.mode)) {
             newB->header.n_ele += *node_count;
         }
     UNLOCK(&newB->header.lock);
     
     //reset thread counter
-    entry->header.insert_count[id_ptr] = 0;
+    entry->header.insert_count[id_ptr].count = 0;
+    entry->header.insert_count[id_ptr].ops = 0;
+    entry->header.insert_count[id_ptr].header = newK;
 
     return newB;
 }
@@ -318,17 +323,31 @@ int64_t delete(access* entry,size_t value, int64_t id_ptr) {
             }
             UNLOCK(bucket_lock);
 
-            entry->header.insert_count[id_ptr]--;
+            entry->header.insert_count[id_ptr].count--;
+            entry->header.insert_count[id_ptr].ops++;
 
-            if(entry->header.insert_count[id_ptr] >= UPDATE || entry->header.insert_count[id_ptr] <= (-1)*UPDATE ) {
-
+            //only update after certain nr of operations (UPDATE) have been done 
+            if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
+                
                 WRITE_LOCK(&b->header.lock);
-                //only update if an expansion hasn't begun
-                if (b->header.n_ele>-1 && b->header.n_ele+entry->header.insert_count[id_ptr]>-1) {
-                    b->header.n_ele+= entry->header.insert_count[id_ptr];
-                    entry->header.insert_count[id_ptr] = 0;
+                //if the header is the same as the header stored in the thread update, if not
+                //an expansion already occured for the previous table and we're in a new table, ops are invalid
+                if(b->header.n_buckets == entry->header.insert_count[id_ptr].header) {
+                    //check for expansion
+                    if (!(b->header.mode)) {
+                        b->header.n_ele+= entry->header.insert_count[id_ptr].count;
+                    }                    
+                }
+                else {
+                    //if the header is not the same, update the header and update the current op (since we already have the lock)
+                    entry->header.insert_count[id_ptr].header = b->header.n_buckets;
+                    entry->ht->header.n_ele--;
                 }
                 UNLOCK(&b->header.lock);
+
+                //in any case, reset to 0 (either it dumped the count, or the count is irrelevant due to ht expansion)
+                entry->header.insert_count[id_ptr].count = 0;
+                entry->header.insert_count[id_ptr].ops = 0;
             }
             return 1;
         }
@@ -376,7 +395,6 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
 
     b = find_bucket_write(b,value);
     size_t h = value & (b->header.n_buckets)-1;
-    // hash(value,b->header.n_buckets);
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
 
 
@@ -410,18 +428,37 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
     //unlock search lock
     UNLOCK(bucket_lock);  
 
-    entry->header.insert_count[id_ptr]++;
+    entry->header.insert_count[id_ptr].count++;
+    entry->header.insert_count[id_ptr].ops++;
 
-    //only update if thread already inserted UPDATE(1000) elements
-    if(entry->header.insert_count[id_ptr] >= UPDATE || entry->header.insert_count[id_ptr] <= (-1)*UPDATE ) {
 
+    //only update after certain nr of operations (UPDATE) have been done 
+    if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
+        
         WRITE_LOCK(&b->header.lock);
-        //only update if an expansion hasn't begun
-            if (b->header.n_ele>-1 && b->header.n_ele+entry->header.insert_count[id_ptr]>-1) {
-                b->header.n_ele+= entry->header.insert_count[id_ptr];
-                entry->header.insert_count[id_ptr] = 0;
+        //if the header is the same as the header stored in the thread update, if not
+        //an expansion already occured for the previous table and we're in a new table, ops are invalid
+        if(b->header.n_buckets == entry->header.insert_count[id_ptr].header) {
+            //check for expansion
+            if (!(b->header.mode)) {
+                b->header.n_ele+= entry->header.insert_count[id_ptr].count;
             }
+            else {
+                //expansion already occuring this way it won't check for expansion when leaving
+                count = 0;
+            }
+            
+        }
+        else {
+            //if the header is not the same, update the header and update the current op (since we already have the lock)
+            entry->header.insert_count[id_ptr].header = b->header.n_buckets;
+            entry->ht->header.n_ele++;
+        }
         UNLOCK(&b->header.lock);
+
+        //in any case, reset to 0 (either it dumped the count, or the count is irrelevant due to ht expansion)
+        entry->header.insert_count[id_ptr].count = 0;
+        entry->header.insert_count[id_ptr].ops = 0;
     }
 
     return count;
@@ -435,38 +472,42 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
     node* n = inst_node(value,id_ptr,b);
     int64_t chain_size = insert(b,entry,n,id_ptr);
 
-    WRITE_LOCK(&b->header.lock);
+    //pre-check to not acquire lock unecessarilly
+    if(chain_size > TRESH) {
+        WRITE_LOCK(&b->header.lock);
+        if(!(b->header.mode) && (b->header.n_ele > b->header.n_buckets)) { 
+                //signal expansion has started
+                b->header.mode = 1;
+                UNLOCK(&b->header.lock);
+                hashtable* oldb = b;
+                b = HashExpansion(b,entry,id_ptr);
+                
+                //signal expansion is finished
+                WRITE_LOCK(&oldb->header.lock);
+                b->header.mode = 2;
+                UNLOCK(&oldb->header.lock);
 
-    if((chain_size > TRESH) && (b->header.n_ele > b->header.n_buckets)) { 
-            b->header.n_ele = -1;
-            UNLOCK(&b->header.lock);
-            hashtable* oldb = b;
-            b = HashExpansion(b,entry,id_ptr);
-            
-            WRITE_LOCK(&oldb->header.lock);
-            //signal expansion is finished
-            oldb->header.n_ele = -2;
-            UNLOCK(&oldb->header.lock);
 
+                //antes isto era só um apontador , não estava com uma struct à volta
+                //fazia-se lock no header para onde o pointer estava a apontar. 
+                //como qualquer thread que queira actualizar este campo tem que dar lock no mesmo header, funciona.
+                //se a hashtable nova tiver dimensão maior que a guardada, troca, se não, passa à frente. 
+                //a unica coisa que estava errada aqui era a ordem, a atribuição a oldb para guardar o lock (para dar unlock)
+                //tem que ser feita depois de adquirir o lock e antes de actualizar
 
-            //antes isto era só um apontador , não estava com uma struct à volta
-            //fazia-se lock no header para onde o pointer estava a apontar. 
-            //como qualquer thread que queira actualizar este campo tem que dar lock no mesmo header, funciona.
-            //se a hashtable nova tiver dimensão maior que a guardada, troca, se não, passa à frente. 
-            //a unica coisa que estava errada aqui era a ordem, a atribuição a oldb para guardar o lock (para dar unlock)
-            //tem que ser feita depois de adquirir o lock e antes de actualizar
+                WRITE_LOCK(&(entry->ht->header).lock);
+                oldb = entry->ht;
 
-            WRITE_LOCK(&(entry->ht->header).lock);
-            oldb = entry->ht;
-
-            if (entry->ht->header.n_buckets < b->header.n_buckets) {
-                entry->ht = b;
-            }
-            UNLOCK(&oldb->header.lock);
-            return 1;
+                if (entry->ht->header.n_buckets < b->header.n_buckets) {
+                    entry->ht = b;
+                }
+                //não vale a pena actualizar o header da thread aqui se não for o header mais recente
+                UNLOCK(&oldb->header.lock);
+                return 1;
+        }
+        UNLOCK(&b->header.lock);
     }
 
-    UNLOCK(&b->header.lock);
     return 1;
 }
 

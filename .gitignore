@@ -17,6 +17,7 @@ files_leap
 old_test_bench
 decomissioned structs
 files/clean_tests.sh 
+files/test_*
 small_tests
 #data crunching
 data/

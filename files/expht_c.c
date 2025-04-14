@@ -2,10 +2,9 @@
 
 // Locks at buckets - no lock at header expansion
 // - lock header
-// - change n_elems to -1 
+// - change mode to 1
 // - unlock header
 // - expand
-// literalmente por logo o h->header.n_ele = -1 
 // dar unlock do header, e deixar expandir, não altera o comportamento-
 // new NULL = header memory pointer
 // inserts from tail
@@ -14,14 +13,14 @@
 
 //*** VERSION CHANGES */
 // -- can be called with jemalloc instead
-// same as struct a with less updates ( with correct insert function)
+// same as struct a with less updates ( with correct insert function) -> struct c
+// same as c with force spacing in the counter array due to false sharing (id_ptr*8 per thread, max 32 threads)
 
 //NODE functions--------------------------------------------------------------------------------------------------------------------
 //instancia um node*
-node *inst_node(size_t k, size_t v, hashtable* b){    
+node *inst_node(size_t k, hashtable* b){    
     node *n = (node *) malloc(sizeof(node));
-    n->data.key = k;
-    n->data.val = v;
+    n->value = k;
     n->next=(void*)b;
     return n;
 };
@@ -48,15 +47,15 @@ int64_t bucket_size(node *first, hashtable* b) {
 }
 
 //insert sort para inserir os elementos por ordem antes de imprimir
-pair* insert_sort(pair vec[], pair p,int64_t size) {
-    pair aux;
-    pair auxj;
+size_t* insert_sort(size_t vec[], size_t val,int64_t size) {
+    size_t aux;
+    size_t auxj;
     short flag = 0;
 
     for(int64_t i =0; i<size; i++) {
-        if(p.key<vec[i].key) {
+        if(val<vec[i]) {
             aux = vec[i];
-            vec[i] = p;
+            vec[i] = val;
             flag = 1;
             size++;
             if(size-1==i+1){
@@ -74,7 +73,7 @@ pair* insert_sort(pair vec[], pair p,int64_t size) {
     }
 
     if(flag == 0) {
-        vec[size] = p;
+        vec[size] = val;
         size++;
     }
 
@@ -90,16 +89,16 @@ void imprimir_node( node *first, hashtable* b){
         if(n == 0) {
             return;
         }
-        pair* vec =(pair*)calloc(sizeof(pair),n);
+        size_t* vec =(size_t*)calloc(sizeof(size_t),n);
         int64_t size = 1;
-        vec[0] = first->data;
+        vec[0] = first->value;
         for(p=first->next; p!=(void*)b && !is_bucket_array(p) ;p=p->next){
-            insert_sort(vec,p->data,size);
+            insert_sort(vec,p->value,size);
             size++;
         }
 
         for(int64_t i=0; i<n; i++) {
-            printf("%ld : %ld \n",vec[i].key,vec[i].val);
+            printf("%ld \n",vec[i]);
         }
     }
 }
@@ -163,7 +162,7 @@ access* create_acess(int64_t s, int64_t n_threads) {
 
     entry->header.thread_id = 0;
     LOCK_INIT( &entry->header.lock, NULL);
-    for(int64_t i=0; i<64; i++) {
+    for(int64_t i=0; i<MAXTHREADS; i++) {
         //printf("header counter %ld : %p = 0 \n",i, &entry->header.insert_count[i]);
         entry->header.insert_count[i].count = 0;
         entry->header.insert_count[i].ops = 0;
@@ -313,7 +312,7 @@ int64_t delete(access* entry,size_t value, int64_t id_ptr) {
     node* prev = cur;
     
     while(cur != (void*)b) {
-        if(cur->data.key == value) {
+        if(cur->value == value) {
             //if node to delete is first
             if(cur == prev) {
                 (&b->bucket)[h].first = cur->next;
@@ -376,7 +375,7 @@ int64_t search(access* entry, size_t value, int64_t id_ptr) {
 
     //if bucket where value should be is empty, return 0
     while(cur != (void*)b) {
-        if(cur->data.key == value) {
+        if(cur->value == value) {
             UNLOCK(bucket_lock);  
             return 1;
         }
@@ -390,7 +389,7 @@ int64_t search(access* entry, size_t value, int64_t id_ptr) {
 
 int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
     
-    size_t value = n->data.key;
+    size_t value = n->value;
     //hashtable* b = entry->ht;
 
     b = find_bucket_write(b,value);
@@ -406,7 +405,7 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
     //get to end of bucket array
     while(cur != (void*)b) {
         //can't insert, value already exists
-        if(cur->data.key == value) {
+        if(cur->value == value) {
             UNLOCK(bucket_lock);  
             return 0;
         }
@@ -469,7 +468,7 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
 // os prints comentados nesta função são usados para fazer debuging. 
 int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
-    node* n = inst_node(value,id_ptr,b);
+    node* n = inst_node(value,b);
     int64_t chain_size = insert(b,entry,n,id_ptr);
 
     //pre-check to not acquire lock unecessarilly

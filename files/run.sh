@@ -73,6 +73,10 @@ case $VERSION in
         printf "picked version e\n"
         gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DVERSION=4 -lpthread -o bench   
     ;;
+    f)
+        printf "picked version f\n"
+        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DVERSION=5 -lpthread -o bench   
+    ;;
     *)
         printf "I need to know which version of the struct you wanna use mate \n"
         exit 1
@@ -81,7 +85,6 @@ esac
 
 
 printf "Testing: ${LOCK_NAME} lock w/ struct ${VERSION} ${JEMALLOC_NAME} \n"
-
 
 N_TH=1
 MAX_TH=33

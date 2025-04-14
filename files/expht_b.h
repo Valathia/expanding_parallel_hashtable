@@ -17,6 +17,7 @@ typedef struct node_bucket{
 
 typedef struct hash_header {
     LOCKS lock;
+    int64_t mode;
     int64_t n_ele;
     int64_t n_buckets;
 }hash_header;
@@ -26,10 +27,15 @@ typedef struct hashtable {
     node_bucket bucket;
 }hashtable;
 
+typedef struct counter {
+    int64_t ops;
+    int64_t count;
+    int64_t header; //n_buckets para identificar o header, não há 2 headers com o mesmo nr de buckets
+}counter;
 
 typedef struct access_header {
     int64_t thread_id;
-    int64_t insert_count[64];
+    counter insert_count[64];
     LOCKS lock;
 }access_header;
 
@@ -37,6 +43,7 @@ typedef struct access_header {
 typedef struct access {
     access_header header;
     hashtable* ht;
+    char _align[CACHE_LINE-sizeof(hashtable*)];
 }access;
 
 hashtable* create_table(int64_t s);

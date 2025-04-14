@@ -53,9 +53,9 @@ hashtable* create_table(int64_t s) {
     h->header.n_ele = 0;
     h->header.mode = 0;
     for(int64_t i = 0; i<s; i++) {
-        (&h->bucket)[i].array = (size_t*)malloc(sizeof(size_t)*TRESH);
+        (&h->bucket)[i].array = (size_t*)malloc(sizeof(size_t)*ARRAY_INIT_SIZE);
         (&h->bucket)[i].n=0;
-        (&h->bucket)[i].size=TRESH;
+        (&h->bucket)[i].size=ARRAY_INIT_SIZE;
         //(&h->bucket)[i].first = (void*)h;
         LOCK_INIT(&(&h->bucket)[i].lock_b, NULL);
     }
@@ -69,7 +69,7 @@ access* create_acess(int64_t s, int64_t n_threads) {
 
     entry->header.thread_id = 0;
     LOCK_INIT( &entry->header.lock, NULL);
-    for(int64_t i=0; i<64; i++) {
+    for(int64_t i=0; i<MAXTHREADS; i++) {
         //printf("header counter %ld : %p = 0 \n",i, &entry->header.insert_count[i]);
         entry->header.insert_count[i].count = 0;
         entry->header.insert_count[i].ops = 0;
@@ -85,7 +85,7 @@ int64_t get_thread_id(access* entry_point) {
     
     //printf("lock \n");
 	int thread_id = entry_point->header.thread_id;
-    entry_point->header.thread_id+=8;
+    entry_point->header.thread_id++;
     //printf("Thread ID: %d \n",thread_id);
     
     UNLOCK(&entry_point->header.lock);
@@ -102,21 +102,15 @@ size_t* expand_insert(hashtable* b, size_t value, size_t h, int64_t id_ptr) {
     size_t* new_bucket = (size_t*)malloc(sizeof(size_t)*newsize);
 
     int i=0;
-    while(old_bucket[i] < value && i<(&b->bucket)[h].n) {
+    while(i<(&b->bucket)[h].n) {
         new_bucket[i] = old_bucket[i];
         i++;
     }
+
     new_bucket[i] = value;
-    int j=i;
-    i++;
 
-    while(j<(&b->bucket)[h].n) {
-        new_bucket[i] = old_bucket[j];
-        i++;
-        j++;
-    }
 
-    (&b->bucket)[h].n = i;
+    (&b->bucket)[h].n = i+1;
     (&b->bucket)[h].size = newsize;
     free(old_bucket);
     return new_bucket;
@@ -126,23 +120,13 @@ size_t* expand_insert(hashtable* b, size_t value, size_t h, int64_t id_ptr) {
 //already positioned in the correct hashtable
 //values are already being inserted in order
 //need to check for array expansion though
-void adjustNodes(array_bucket bucket, hashtable* b, int64_t id_ptr) {
+void adjustNodes(array_bucket bucket, hashtable* b, access* entry, int64_t id_ptr) {
     size_t h;
     int64_t cur_size;
+
     if ( bucket.n != 0 && !is_bucket_array(bucket.array)) { 
         for(int i=0; i<bucket.n ; i++) {
-            h =  bucket.array[i] & (b->header.n_buckets)-1;
-            cur_size = (&b->bucket)[h].n;
-            
-            WRITE_LOCK(&(&b->bucket)[h].lock_b);
-            if(cur_size < (&b->bucket)[h].size) {
-                (&b->bucket)[h].array[cur_size] = bucket.array[i];
-                (&b->bucket)[h].n++;
-            }
-            else {
-                (&b->bucket)[h].array = expand_insert(b, bucket.array[i],h,id_ptr);
-            }
-            UNLOCK(&(&b->bucket)[h].lock_b);
+            insert(b,entry,bucket.array[i],id_ptr);
         }
     }
     return;
@@ -165,15 +149,17 @@ hashtable* HashExpansion(hashtable* b,  access* entry, int64_t id_ptr) {
         
         if ((&oldB->bucket)[i].n != 0) { //&& (&oldB->bucket)[i].first != node_mask
 
-            adjustNodes((&oldB->bucket)[i],newB,id_ptr);
+            adjustNodes((&oldB->bucket)[i],newB,entry,id_ptr);
 
         }  
-
+        
+        //free old array memory && point to new ht
+        free((&oldB->bucket)[i].array);
         (&oldB->bucket)[i].array = node_mask;
+        
         node_count += (&oldB->bucket)[i].n;
 
         UNLOCK(&((&oldB->bucket)[i].lock_b));
-
         i++;
     }
 
@@ -188,7 +174,6 @@ hashtable* HashExpansion(hashtable* b,  access* entry, int64_t id_ptr) {
     entry->header.insert_count[id_ptr].ops = 0;
     entry->header.insert_count[id_ptr].header = newK;
     
-
     return newB;
 }
 
@@ -251,9 +236,10 @@ int64_t search(access* entry, size_t value, int64_t id_ptr) {
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
     
     int i = 0;
-    while(value>(&b->bucket)[h].array[i] && i < (&b->bucket)[h].n) {
+    while(value!=(&b->bucket)[h].array[i] && i < (&b->bucket)[h].n) {
         i++;
     }
+
 
     size_t stop_value = (&b->bucket)[h].array[i];
     int64_t size =  (&b->bucket)[h].n;
@@ -274,42 +260,25 @@ int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
     //expand && insert condition
     if((&b->bucket)[h].size==(&b->bucket)[h].n) {
         (&b->bucket)[h].array = expand_insert(b,value,h,id_ptr);
-
     }
     else {
         
         int i = 0;
-        //stops when value > or =
-        while((&b->bucket)[h].array[i]<value && i<(&b->bucket)[h].n) {
+
+        //search to see if value already there
+        while((&b->bucket)[h].array[i]!=value && i<(&b->bucket)[h].n) {
             i++;
         }
 
-        //if inside current valid space
-        if(i<(&b->bucket)[h].n) {
-            //shimmy the values to the right and insert
-            if((&b->bucket)[h].array[i] != value) {
-                size_t cur_value;
-                size_t prev_value = value;
-                while(i<(&b->bucket)[h].n) {
-                    cur_value = (&b->bucket)[h].array[i];
-                    (&b->bucket)[h].array[i] = prev_value;
-                    prev_value = cur_value;
-                    i++;
-                }
-                (&b->bucket)[h].array[i] = prev_value;
-                (&b->bucket)[h].n++;
-
-            }
-            //value already inserted
-            else {
-                int size = (&b->bucket)[h].n;
-                UNLOCK(bucket_lock);  
-                return size;
-            }
-        }
-        else {
+        if(i==(&b->bucket)[h].n) {
             (&b->bucket)[h].array[i] = value;
             (&b->bucket)[h].n++;
+        }
+        else {
+            //already exists -- no reason to check for expansion if no op was done
+            int size = (&b->bucket)[h].n;
+            UNLOCK(bucket_lock);  
+            return 0;
         }
     }
 
@@ -361,15 +330,14 @@ int64_t delete(access* entry, size_t value, int64_t id_ptr) {
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
 
     int i = 0;
-    while(value>(&b->bucket)[h].array[i] && i < (&b->bucket)[h].n) {
+    while(value!=(&b->bucket)[h].array[i] && i < (&b->bucket)[h].n) {
         i++;
     }
 
     if( (&b->bucket)[h].array[i]==value && i< (&b->bucket)[h].n) {
-        while(i < ((&b->bucket)[h].n-1)) {
-            (&b->bucket)[h].array[i] = (&b->bucket)[h].array[i+1];
-            i++;
-        }
+        //take the last element and put it at the index of the deleted element
+        (&b->bucket)[h].array[i] = (&b->bucket)[h].array[(&b->bucket)[h].n-1];
+
         (&b->bucket)[h].n--;
         UNLOCK(bucket_lock);
 
@@ -407,7 +375,6 @@ int64_t delete(access* entry, size_t value, int64_t id_ptr) {
     //couldn't find value to delete    
     UNLOCK(bucket_lock);
     return 0;
-
 }
 
 // função que faz handle do processo de insert
