@@ -59,23 +59,23 @@ case $VERSION in
     ;;
     b)
         printf "picked version b\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DVERSION=1 -lpthread -o bench
+        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench
     ;;
     c)
         printf "picked version c\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DVERSION=2 -lpthread -o bench   
+        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench   
     ;;
     d)
         printf "picked version d\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DVERSION=3 -lpthread -o bench   
+        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
     ;;
     e)
         printf "picked version e\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DVERSION=4 -lpthread -o bench   
+        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
     ;;
     f)
         printf "picked version f\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DVERSION=5 -lpthread -o bench   
+        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
     ;;
     *)
         printf "I need to know which version of the struct you wanna use mate \n"
@@ -99,9 +99,8 @@ do
     else 
         FILE="../tests/${LOCK_NAME}/${VERSION}/${N_TH}_${N_ELEM}_${LOCK_NAME}_${VERSION}_${JEMALLOC_NAME}.csv"
     fi
-
     
-    printf "inserts real time, inserts process time, deletes real time, deletes process time, hits real time, hits process time, misses real time, misses process time, mixed real time, mixed process time\n" > $FILE
+    printf "inserts real time, inserts process time, hashtable size, elements recorded, elements total, elements actual, largest element size, smallest element size, average element size, largest bucket size, smallest bucket size, average bucket size, deletes real time, deletes process time, hits real time, hits process time, misses real time, misses process time, mixed real time, mixed process time\n" > $FILE
 
     B=0;
 

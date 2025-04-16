@@ -4,6 +4,7 @@
 
 #old tests
 files/tests.sh
+files/structs_with_rw_locks
 
 #compiled files
 files/*.o 
@@ -19,6 +20,10 @@ decomissioned structs
 files/clean_tests.sh 
 files/test_*
 small_tests
+files/run_base.sh
+sibila_array_addresses.txt
+files/expht_b.c
+
 #data crunching
 data/
 files/run_.sh

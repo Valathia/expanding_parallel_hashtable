@@ -10,24 +10,10 @@
 // version flag = 0 -> a
 
 #if DEBUG
-
 #include <assert.h>
-
 #endif
 
-#if VERSION == 1
-	#include "expht_b.h"
-#elif VERSION == 2
-	#include "expht_c.h"
-#elif VERSION == 3 
-	#include "expht_d.h"
-#elif VERSION == 4
-	#include "expht_e.h"
-#elif VERSION == 5
-	#include "expht_f.h"
-#else 
-	#include "expht_a.h" 
-#endif
+#include "config.h"
 
 #define GOLD_RATIO 11400714819323198485ULL
 #define LRAND_MAX (1ULL<<31)
@@ -156,6 +142,90 @@ void *test_worker(void *entry_point)
 }
 #endif
 
+//if all inserts
+void stats() {
+
+	hashtable* ht = entry->ht;
+	int64_t table_size = ht->header.n_buckets;
+	int64_t recorded_elements = ht->header.n_ele;
+	int64_t total_elements = ht->header.n_ele;
+	int64_t list_size = 0;
+	int64_t max_size = 0;
+	int64_t min_size = INT32_MAX;
+	int64_t aux = 0;
+	int64_t aux_exp = 0;
+	int64_t min_exp = INT32_MAX;
+	int64_t max_exp = 0;
+	int64_t exp_size = 0;
+	int64_t actual = 0;
+	//n_elementos
+
+	for(int i=0; i<MAXTHREADS; i++) {
+		total_elements += entry->header.insert_count[i].count;
+	}
+	
+	#ifdef ARRAY
+		for(int i=0; i<table_size; i++) {
+			aux = (&ht->bucket)[i].n;
+			aux_exp = (&ht->bucket)[i].size;
+
+			if (aux > 0) {
+				if(aux > max_size) {
+					max_size = aux;
+				}
+
+				if(aux < min_size) {
+					min_size = aux;
+				}
+				
+				list_size+=aux;
+			}
+			
+			if (aux_exp > 0) {
+				if(aux_exp > max_exp) {
+					max_exp = aux_exp;
+				}
+
+				if(aux < min_exp) {
+					min_exp = aux_exp;
+				}
+				
+				exp_size+=aux_exp;
+			}
+		}
+		actual = exp_size;
+	#else 
+		for(int i=0; i<table_size; i++) {
+			aux = bucket_size((&ht->bucket)[i].first,ht);
+			if (aux > 0) {
+				if(aux > max_size) {
+					max_size = aux;
+				}
+
+				if(aux < min_size) {
+					min_size = aux;
+				}
+				
+				list_size+=aux;
+			}
+		}
+		actual = list_size;
+	#endif
+
+	printf("Hashtable size: %ld\n", table_size);
+	printf("Elements Recorded: %ld\n", recorded_elements);
+	printf("Elements Total: %ld\n", total_elements);
+	printf("Elements Actual: %ld\n",actual);
+	printf("Largest Element Size: %ld\n",max_size);
+	printf("Smallest Element Size: %ld\n",min_size);
+	printf("Average Element Size: %lf\n",(float)list_size/(float)table_size);
+	printf("Largest Bucket Size: %ld\n",max_exp);
+	printf("Smallest Bucket Size: %ld\n",min_exp);
+	printf("Average Bucket Size: %lf\n",(float)exp_size/(float)table_size);
+
+}
+
+
 int main(int argc, char **argv)
 {
 	if(argc < 7){
@@ -234,6 +304,9 @@ int main(int argc, char **argv)
 	time = end_process.tv_sec - start_process.tv_sec + ((end_process.tv_nsec - start_process.tv_nsec)/1000000000.0);
 	printf("Process time: %lf\n", time);
 
+	if(inserts == 100) {
+		stats();
+	}
 	//imprimir_hash(entry->ht);
 
 #if DEBUG

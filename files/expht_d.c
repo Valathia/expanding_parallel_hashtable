@@ -1,97 +1,5 @@
-#include "expht_d.h"
+#include "array_functions.h"
 
-//função que verifica se o bucket está a apontar para uma hastable nova 
-size_t is_bucket_array(size_t* first) {
-    return (uint64_t)first&1;
-}
-
-//imprime os nodes 
-int imprimir_array(hashtable* b, int64_t index){
-
-    for(int i=0; i<(&b->bucket)[index].n; i++) {
-        if(i < (&b->bucket)[index].n-1) {
-            printf("%lld , ",(&b->bucket)[index].array[i]);
-        }
-        else {
-            printf("%lld \n",(&b->bucket)[index].array[i]);
-        }
-    }
-    return (&b->bucket)[index].n;
-}
-
-void imprimir_hash(hashtable* ht) {
-    int64_t real_num = 0;
-    printf("-------- HASHTABLE %lld --------\n",ht->header.n_buckets);
-    for(int64_t i=0;i<ht->header.n_buckets;i++) {
-        
-        printf("index : %lld\n",i);
-        printf("---------------------------\n");
-
-        real_num += imprimir_array(ht,i);
-        
-        printf("---------------------------\n");
-    }
-
-    printf("n elem: %lld\n", ht->header.n_ele);
-    printf("\n");
-    printf("Actual elem count: %lld \n",real_num);
-}
-
-
-//Hashtable functions----------------------------------------------------------------------------------------------------------
-//hash simples 
-// n -> nr base 2
-// x % n == x & n-1 --- só funciona porque os nr de buckets é uma potência de base 2
-size_t hash(size_t key, int64_t size) {
-    return  key & (size-1);
-}
-
-hashtable* create_table(int64_t s) {
-    hashtable* h = (hashtable*)malloc(sizeof(hash_header) + sizeof(array_bucket)*s);
-    h->header.n_buckets = s;
-    LOCK_INIT(&h->header.lock, NULL);
-    h->header.n_ele = 0;
-    h->header.mode = 0;
-    for(int64_t i = 0; i<s; i++) {
-        (&h->bucket)[i].array = (size_t*)malloc(sizeof(size_t)*ARRAY_INIT_SIZE);
-        (&h->bucket)[i].n=0;
-        (&h->bucket)[i].size=ARRAY_INIT_SIZE;
-        //(&h->bucket)[i].first = (void*)h;
-        LOCK_INIT(&(&h->bucket)[i].lock_b, NULL);
-    }
-    return h;
-}
-
-//data structure to keep hashtable head pointer to use the benchmark
-access* create_acess(int64_t s, int64_t n_threads) {
-    access* entry = (access*) malloc(sizeof(access));
-    entry->ht = create_table(s);
-
-    entry->header.thread_id = 0;
-    LOCK_INIT( &entry->header.lock, NULL);
-    for(int64_t i=0; i<MAXTHREADS; i++) {
-        //printf("header counter %ld : %p = 0 \n",i, &entry->header.insert_count[i]);
-        entry->header.insert_count[i].count = 0;
-        entry->header.insert_count[i].ops = 0;
-        entry->header.insert_count[i].header = s;
-    }
-
-    return entry;
-}
-
-//pôr aqui um cas ?
-int64_t get_thread_id(access* entry_point) {
-    WRITE_LOCK(&entry_point->header.lock);
-    
-    //printf("lock \n");
-	int thread_id = entry_point->header.thread_id;
-    entry_point->header.thread_id++;
-    //printf("Thread ID: %d \n",thread_id);
-    
-    UNLOCK(&entry_point->header.lock);
-
-    return thread_id;
-}
 
 //---------------------------------------------------------------------------------------------------------------
 
@@ -99,7 +7,7 @@ size_t* expand_insert(hashtable* b, size_t value, size_t h, int64_t id_ptr) {
     size_t* old_bucket = (&b->bucket)[h].array;
     int64_t newsize = (&b->bucket)[h].size*2;
     //imprimir_array(b,h);
-    size_t* new_bucket = (size_t*)malloc(sizeof(size_t)*newsize);
+    size_t* new_bucket = (size_t*)aligned_alloc(sizeof(size_t)*newsize,1);
 
     int i=0;
     while(old_bucket[i] < value && i<(&b->bucket)[h].n) {
@@ -126,7 +34,7 @@ size_t* expand_insert(hashtable* b, size_t value, size_t h, int64_t id_ptr) {
 //already positioned in the correct hashtable
 //values are already being inserted in order
 //need to check for array expansion though
-void adjustNodes(array_bucket bucket, hashtable* b, int64_t id_ptr) {
+void adjustNodes(BUCKET bucket, hashtable* b, int64_t id_ptr) {
     size_t h;
     int64_t cur_size;
     if ( bucket.n != 0 && !is_bucket_array(bucket.array)) { 
@@ -424,7 +332,7 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
     // se quando voltou o valor é !=-1, deve incrementar e verificar se precisa de ser expandida. 
 
 
-    if(chain_size > TRESH) {
+    if((chain_size > TRESH ) && !(b->header.mode) && (b->header.n_ele > b->header.n_buckets)) {
         WRITE_LOCK(&b->header.lock);
 
         if (!(b->header.mode) && (b->header.n_ele > b->header.n_buckets)) { 
@@ -436,16 +344,14 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
                 
                 WRITE_LOCK(&oldb->header.lock);
                 //signal expansion is finished
-                b->header.mode = 2;
+                oldb->header.mode = 2;
                 UNLOCK(&oldb->header.lock);
 
-                WRITE_LOCK(&(entry->ht->header).lock);
-                oldb = entry->ht;
-
+                WRITE_LOCK(&entry->lock);
                 if (entry->ht->header.n_buckets < b->header.n_buckets) {
                     entry->ht = b;
                 }
-                UNLOCK(&oldb->header.lock);
+                UNLOCK(&entry->lock);
                 return 1;
         }
         UNLOCK(&b->header.lock);
