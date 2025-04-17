@@ -1,6 +1,7 @@
 #include "config.h"
 
 //NODE functions--------------------------------------------------------------------------------------------------------------------
+
 //instancia um node*
 node *inst_node(size_t k, hashtable* b){    
     node *n = (node *) malloc(sizeof(node));
@@ -73,7 +74,7 @@ void imprimir_node( node *first, hashtable* b){
         if(n == 0) {
             return;
         }
-        size_t* vec =(size_t*)calloc(sizeof(size_t),n);
+        size_t* vec =(size_t*)malloc(sizeof(size_t)*n);
         int64_t size = 1;
         vec[0] = first->value;
         for(p=first->next; p!=(void*)b && !is_bucket_array(p) ;p=p->next){
@@ -144,7 +145,7 @@ access* create_acess(int64_t s, int64_t n_threads) {
     access* entry = (access*) malloc(sizeof(access));
     entry->ht = create_table(s);
     entry->header.thread_id = 0;
-    entry->header.insert_count = (counter*)malloc(sizeof(counter)*MAXTHREADS);
+    //entry->header.insert_count = (counter*)malloc(sizeof(counter)*MAXTHREADS);
     LOCK_INIT( &entry->header.lock, NULL);
     LOCK_INIT( &entry->lock, NULL);
     for(int64_t i=0; i<MAXTHREADS; i++) {
@@ -152,6 +153,7 @@ access* create_acess(int64_t s, int64_t n_threads) {
         entry->header.insert_count[i].count = 0;
         entry->header.insert_count[i].ops = 0;
         entry->header.insert_count[i].header = s;
+        entry->header.insert_count[i].ht_header_lock_count = 0;
     }
 
     return entry;

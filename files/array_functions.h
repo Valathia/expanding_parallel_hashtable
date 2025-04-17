@@ -67,7 +67,7 @@ hashtable* create_table(int64_t s) {
 access* create_acess(int64_t s, int64_t n_threads) {
     access* entry = (access*) malloc(sizeof(access));
     entry->ht = create_table(s);
-    entry->header.insert_count = (counter*)malloc(sizeof(counter)*MAXTHREADS);
+    //entry->header.insert_count = (counter*)malloc(sizeof(counter)*MAXTHREADS);
 
     LOCK_INIT( &entry->header.lock, NULL);
     LOCK_INIT( &entry->lock,NULL);
@@ -78,6 +78,7 @@ access* create_acess(int64_t s, int64_t n_threads) {
         entry->header.insert_count[i].count = 0;
         entry->header.insert_count[i].ops = 0;
         entry->header.insert_count[i].header = s;
+        entry->header.insert_count[i].ht_header_lock_count = 0;
     }
 
     return entry;

@@ -15,7 +15,7 @@
 // -- can be called with jemalloc instead
 // same as struct a with less updates ( with correct insert function) -> struct c
 // same as c with force spacing in the counter array due to false sharing (id_ptr*8 per thread, max 32 threads)
-
+// COOP
 
 //---------------------------------------------------------------------------------------------------------------
 
@@ -48,7 +48,8 @@ hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
     int64_t i=0;
     node* node_mask = (void*)(uint64_t*)((uint64_t)newB | 1);
 
-    //update thread counter for new header before STARTING
+
+    //update thread counter for new header BEFORE starting
     entry->header.insert_count[id_ptr].header = newK;
     entry->header.insert_count[id_ptr].count = 0;
     entry->header.insert_count[id_ptr].ops = 0;
@@ -73,7 +74,6 @@ hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
     if ((entry->header.insert_count[id_ptr].count > 0) && !(newB->header.mode)) { 
         // dump last ops in header
         entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
         WRITE_LOCK(&newB->header.lock);
             if(!(newB->header.mode)) {
                 newB->header.n_ele += entry->header.insert_count[id_ptr].count;
@@ -171,7 +171,6 @@ int64_t delete(access* entry,size_t value, int64_t id_ptr) {
                 //an expansion already occured for the previous table and we're in a new table, ops are invalid
                 if((b->header.n_buckets == entry->header.insert_count[id_ptr].header) && !(b->header.mode)) {
                     entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
                     WRITE_LOCK(&b->header.lock);
 
                     //check for expansion
@@ -243,6 +242,37 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
     node* prev = cur;
 
     int64_t count = 1;
+
+    //if we're already in the hastable with a bucket lock you can't be done with expansion
+    if(b->header.mode) {
+        //you can however, be in the first bucket, in that case you can't know which one is the new table. 
+        //the first bucket also needs to already be pointing to the new table
+        if(h!=0 && is_bucket_array((&b->bucket)[0].first)) {
+
+            //get new hashtable
+            hashtable* newb = (void *)((uint64_t)(&b->bucket)[0].first & ~(1<<0));
+
+            //clear counter if the thread doesn't know about the new header already
+            if(entry->header.insert_count[id_ptr].header <  newb->header.n_buckets) {
+                entry->header.insert_count[id_ptr].count = 0;
+                entry->header.insert_count[id_ptr].ops = 0;
+                entry->header.insert_count[id_ptr].header = newb->header.n_buckets;
+            }
+
+            
+            //move nodes
+            adjustNodes((&b->bucket)[h].first,newb,b,entry,id_ptr);
+            //insert new node into newtable
+            count = insert(newb,entry,n,id_ptr);
+            
+            //set node mask
+            (&b->bucket)[h].first = (&b->bucket)[0].first;
+            b = newb;
+
+            UNLOCK(bucket_lock);
+            return count;
+        }
+    }
 
     //get to end of bucket array
     while(cur != (void*)b) {
@@ -320,7 +350,6 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
     //pre-check to not acquire lock unecessarilly
     if((chain_size > TRESH ) && !(b->header.mode) && (b->header.n_ele > b->header.n_buckets)){
         entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
         WRITE_LOCK(&b->header.lock);
         if(!(b->header.mode) && (b->header.n_ele > b->header.n_buckets)) { 
                 //signal expansion has started
@@ -331,7 +360,6 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
                 
                 //signal expansion is finished
                 entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
                 WRITE_LOCK(&oldb->header.lock);
                 oldb->header.mode = 2;
                 UNLOCK(&oldb->header.lock);

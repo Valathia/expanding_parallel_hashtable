@@ -75,7 +75,7 @@ case $VERSION in
     ;;
     f)
         printf "picked version f\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
+        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench   
     ;;
     *)
         printf "I need to know which version of the struct you wanna use mate \n"
@@ -100,7 +100,7 @@ do
         FILE="../tests/${LOCK_NAME}/${VERSION}/${N_TH}_${N_ELEM}_${LOCK_NAME}_${VERSION}_${JEMALLOC_NAME}.csv"
     fi
     
-    printf "inserts real time, inserts process time, hashtable size, elements recorded, elements total, elements actual, largest element size, smallest element size, average element size, largest bucket size, smallest bucket size, average bucket size, deletes real time, deletes process time, hits real time, hits process time, misses real time, misses process time, mixed real time, mixed process time\n" > $FILE
+    printf "inserts real time, inserts process time, hashtable size, elements recorded, elements total, elements actual, largest element size, smallest element size, average element size, largest bucket size, smallest bucket size, average bucket size, header access total, header access average, deletes real time, deletes process time, hits real time, hits process time, misses real time, misses process time, mixed real time, mixed process time\n" > $FILE
 
     B=0;
 

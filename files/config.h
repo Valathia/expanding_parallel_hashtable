@@ -44,8 +44,6 @@
         int64_t n;
         int64_t size;
     }BUCKET;
-
-
 #else
     typedef struct __attribute__ ((aligned(64))) node {
         size_t value;
@@ -76,13 +74,16 @@ typedef struct __attribute__ ((aligned(64))) counter {
     int64_t ops;
     int64_t count;
     int64_t header; //n_buckets para identificar o header, não há 2 headers com o mesmo nr de buckets
+    int64_t ht_header_lock_count;
     //char _align[CACHE_LINE-sizeof(int64_t)*3];
 }counter;
 
-typedef struct __attribute__ ((aligned(64))) access_header {
+//spacing so hopefully the lock for the ht pointer is separated from the header
+typedef struct access_header {
     LOCKS lock;
     int64_t thread_id;
-    counter* insert_count;
+    char _align[16];
+    counter insert_count[MAXTHREADS];
 }access_header;
 
 // struct to 

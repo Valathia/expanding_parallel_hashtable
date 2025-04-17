@@ -157,11 +157,18 @@ void stats() {
 	int64_t min_exp = INT32_MAX;
 	int64_t max_exp = 0;
 	int64_t exp_size = 0;
-	int64_t actual = 0;
+	int64_t header_access = 0;
 	//n_elementos
+	int64_t moda[64];
+	for(int i=0; i<64;i++) {
+		moda[i] = 0;
+	}
 
 	for(int i=0; i<MAXTHREADS; i++) {
-		total_elements += entry->header.insert_count[i].count;
+		if(entry->header.insert_count[i].header == entry->ht->header.n_buckets) {
+			total_elements += entry->header.insert_count[i].count;
+			header_access +=entry->header.insert_count[i].ht_header_lock_count;
+		}
 	}
 	
 	#ifdef ARRAY
@@ -181,22 +188,22 @@ void stats() {
 				list_size+=aux;
 			}
 			
-			if (aux_exp > 0) {
-				if(aux_exp > max_exp) {
-					max_exp = aux_exp;
-				}
 
-				if(aux < min_exp) {
-					min_exp = aux_exp;
-				}
-				
-				exp_size+=aux_exp;
+			if(aux_exp > max_exp) {
+				max_exp = aux_exp;
 			}
+
+			if(aux < min_exp) {
+				min_exp = aux_exp;
+			}
+			
+			exp_size+=aux_exp;
+			
 		}
-		actual = exp_size;
 	#else 
 		for(int i=0; i<table_size; i++) {
 			aux = bucket_size((&ht->bucket)[i].first,ht);
+			moda[aux] += 1;
 			if (aux > 0) {
 				if(aux > max_size) {
 					max_size = aux;
@@ -209,19 +216,35 @@ void stats() {
 				list_size+=aux;
 			}
 		}
-		actual = list_size;
 	#endif
+	int max_mode = moda[0];
+	int max_i = 0;
+	int min_mode = moda[0];
+	int min_i = 0;
+	for(int i=0; i<64;i++) {
+		if(moda[i] > max_mode) {
+			max_mode = moda[i];
+			max_i = i; 
+		}
+
+		if(moda[i] > min_mode) {
+			min_mode = moda[i];
+			min_i = i; 
+		}
+	}
 
 	printf("Hashtable size: %ld\n", table_size);
 	printf("Elements Recorded: %ld\n", recorded_elements);
 	printf("Elements Total: %ld\n", total_elements);
-	printf("Elements Actual: %ld\n",actual);
+	printf("Elements Actual: %ld\n",list_size);
 	printf("Largest Element Size: %ld\n",max_size);
 	printf("Smallest Element Size: %ld\n",min_size);
 	printf("Average Element Size: %lf\n",(float)list_size/(float)table_size);
 	printf("Largest Bucket Size: %ld\n",max_exp);
 	printf("Smallest Bucket Size: %ld\n",min_exp);
-	printf("Average Bucket Size: %lf\n",(float)exp_size/(float)table_size);
+	printf("Average Bucket Size: %lf\n", (float)exp_size/(float)table_size);
+	printf("Header Access Total: %ld\n",header_access);
+	printf("Header Access Average: %lf\n",(float)header_access/(float)n_threads);
 
 }
 
