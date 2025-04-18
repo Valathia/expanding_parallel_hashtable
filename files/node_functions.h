@@ -31,7 +31,37 @@ int64_t bucket_size(node *first, hashtable* b) {
     return i;
 }
 
-//insert sort para inserir os elementos por ordem antes de imprimir
+//Hashtable functions----------------------------------------------------------------------------------------------------------
+//hash simples 
+// n -> nr base 2
+// x % n == x & n-1
+size_t hash(size_t key, int64_t size) {
+
+    return  key & (size-1);
+}
+
+// tentei, artificialmente, fazer com que o h->bucket aponte para ele prórpio
+// depois por as posições de memória correspondetes a NULL, o problema:
+// nunca posso usar bucket[i] porque o compilador vai tratar sempre como sendo um node*
+// com nodes dentro, o que faz com que por exemplo, no for, o i quando incrementa 1 à memória,
+// se estiver como tenho escrito, incrementa 8 que é o size de um node* mas se tentar fazer h->bucket[i]
+// vai incrementar 16 que é o size de um node. 
+// Ou seja, tecnicamente, tenho (node* -> NULL)*n_buckets em memória continua com a restante estrutura. 
+// mas não posso usar a sintaxe normal. 
+hashtable* create_table(int64_t s) {
+    hashtable* h = (hashtable*)malloc(sizeof(hash_header) + sizeof(BUCKET)*s);
+    h->header.n_buckets = s;
+    LOCK_INIT(&h->header.lock, NULL);
+    h->header.n_ele = 0;
+    h->header.mode = 0;
+    for(int64_t i = 0; i<s; i++) {
+        (&h->bucket)[i].first = (void*)h;
+        LOCK_INIT(&(&h->bucket)[i].lock_b, NULL);
+    }
+    return h;
+}
+
+ //insert sort para inserir os elementos por ordem antes de imprimir
 size_t* insert_sort(size_t vec[], size_t val,int64_t size) {
     size_t aux;
     size_t auxj;
@@ -66,7 +96,7 @@ size_t* insert_sort(size_t vec[], size_t val,int64_t size) {
 }
 
 //imprime os nodes 
-void imprimir_node( node *first, hashtable* b){
+void imprimir_node( node *first, hashtable* b, FILE* f){
     struct node *p = NULL;
 
     if(first != (void*)b) {
@@ -83,59 +113,27 @@ void imprimir_node( node *first, hashtable* b){
         }
 
         for(int64_t i=0; i<n; i++) {
-            printf("%ld \n",vec[i]);
+            fprintf(f,"%ld \n",vec[i]);
         }
     }
 }
 
-
-//Hashtable functions----------------------------------------------------------------------------------------------------------
-//hash simples 
-// n -> nr base 2
-// x % n == x & n-1
-size_t hash(size_t key, int64_t size) {
-
-    return  key & (size-1);
-}
-
-// tentei, artificialmente, fazer com que o h->bucket aponte para ele prórpio
-// depois por as posições de memória correspondetes a NULL, o problema:
-// nunca posso usar bucket[i] porque o compilador vai tratar sempre como sendo um node*
-// com nodes dentro, o que faz com que por exemplo, no for, o i quando incrementa 1 à memória,
-// se estiver como tenho escrito, incrementa 8 que é o size de um node* mas se tentar fazer h->bucket[i]
-// vai incrementar 16 que é o size de um node. 
-// Ou seja, tecnicamente, tenho (node* -> NULL)*n_buckets em memória continua com a restante estrutura. 
-// mas não posso usar a sintaxe normal. 
-hashtable* create_table(int64_t s) {
-    hashtable* h = (hashtable*)malloc(sizeof(hash_header) + sizeof(BUCKET)*s);
-    h->header.n_buckets = s;
-    LOCK_INIT(&h->header.lock, NULL);
-    h->header.n_ele = 0;
-    h->header.mode = 0;
-    for(int64_t i = 0; i<s; i++) {
-        (&h->bucket)[i].first = (void*)h;
-        LOCK_INIT(&(&h->bucket)[i].lock_b, NULL);
-    }
-    return h;
-}
-
-
 //imprime a hashtable
-void imprimir_hash(hashtable* ht) {
+void imprimir_hash(hashtable* ht, FILE* f) {
 
-    printf("-------- HASHTABLE %ld --------\n",ht->header.n_buckets);
+    fprintf(f,"-------- HASHTABLE %lld --------\n",ht->header.n_buckets);
     for(int64_t i=0;i<ht->header.n_buckets;i++) {
         
-        printf("index : %ld\n",i);
-        printf("---------------------------\n");
+        fprintf(f,"index : %lld\n",i);
+        fprintf(f,"---------------------------\n");
 
-        imprimir_node((&ht->bucket)[i].first,ht);
+        imprimir_node((&ht->bucket)[i].first,ht,f);
         
-        printf("---------------------------\n");
+        fprintf(f,"---------------------------\n");
     }
 
-    printf("n elem: %ld\n", ht->header.n_ele);
-    printf("\n");
+    fprintf(f,"n elem: %lld\n", ht->header.n_ele);
+    fprintf(f,"\n");
 
 }
 
@@ -170,4 +168,41 @@ int64_t get_thread_id(access* entry_point) {
     UNLOCK(&entry_point->header.lock);
 
     return thread_id;
+}
+
+//update header_counter with trylock
+int32_t header_update(access* entry, hashtable* b, int32_t count, int64_t id_ptr) {
+
+    //if the header is the same as the header stored in the thread update, if not
+    //an expansion already occured for the previous table and we're in a new table, ops are invalid
+    if((b->header.n_buckets == entry->header.insert_count[id_ptr].header) && !(b->header.mode)) {
+
+        //only lock if header is the same and has not begin expanding
+        if (!TRY_LOCK(&b->header.lock)) {
+            entry->header.insert_count[id_ptr].ht_header_lock_count++;
+
+            //recheck for expansion after gaining lock
+            if (!(b->header.mode)) {
+                b->header.n_ele+= entry->header.insert_count[id_ptr].count;
+                //printf("updated! %ld \n",b->header.n_ele);
+            }
+            else {
+                //expansion already occuring this way it won't check for expansion when leaving
+                count = 0;
+            }
+
+            entry->header.insert_count[id_ptr].count = 0;
+            entry->header.insert_count[id_ptr].ops = 0;
+
+            UNLOCK(&b->header.lock);
+        }
+    }
+    else {
+        //if the header is not the same, update the header (don't need a lock to read this, this attribute never changes)
+        entry->header.insert_count[id_ptr].header = b->header.n_buckets;
+        entry->header.insert_count[id_ptr].count = 0;
+        entry->header.insert_count[id_ptr].ops = 0;
+    }
+
+    return count;
 }

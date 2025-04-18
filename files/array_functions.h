@@ -7,36 +7,37 @@ size_t is_bucket_array(size_t* first) {
 }
 
 //imprime os nodes 
-int imprimir_array(hashtable* b, int64_t index){
+    //imprime os nodes 
+    int imprimir_array(hashtable* b, int64_t index, FILE* f){
 
-    for(int i=0; i<(&b->bucket)[index].n; i++) {
-        if(i < (&b->bucket)[index].n-1) {
-            printf("%lld , ",(&b->bucket)[index].array[i]);
+        for(int i=0; i<(&b->bucket)[index].n; i++) {
+            if(i < (&b->bucket)[index].n-1) {
+                fprintf(f,"%zu \n ",(&b->bucket)[index].array[i]);
+            }
+            else {
+                fprintf(f,"%zu \n",(&b->bucket)[index].array[i]);
+            }
         }
-        else {
-            printf("%lld \n",(&b->bucket)[index].array[i]);
-        }
-    }
-    return (&b->bucket)[index].n;
-}
-
-void imprimir_hash(hashtable* ht) {
-    int64_t real_num = 0;
-    printf("-------- HASHTABLE %lld --------\n",ht->header.n_buckets);
-    for(int64_t i=0;i<ht->header.n_buckets;i++) {
-        
-        printf("index : %lld\n",i);
-        printf("---------------------------\n");
-
-        real_num += imprimir_array(ht,i);
-        
-        printf("---------------------------\n");
+        return (&b->bucket)[index].n;
     }
 
-    printf("n elem: %lld\n", ht->header.n_ele);
-    printf("\n");
-    printf("Actual elem count: %lld \n",real_num);
-}
+    void imprimir_hash(hashtable* ht,FILE* f) {
+        int64_t real_num = 0;
+        fprintf(f,"-------- HASHTABLE %lld --------\n",ht->header.n_buckets);
+        for(int64_t i=0;i<ht->header.n_buckets;i++) {
+            
+            fprintf(f,"index : %lld | array size: %lld | # elem: %lld \n",i,(&ht->bucket)[i].size,(&ht->bucket)[i].n);
+            fprintf(f,"--------------------------------------------------------\n");
+
+            real_num += imprimir_array(ht,i,f);
+            
+            fprintf(f,"--------------------------------------------------------\n");
+        }
+
+        fprintf(f,"n elem: %lld\n", ht->header.n_ele);
+        fprintf(f,"\n");
+        fprintf(f,"Actual elem count: %lld \n",real_num);
+    }
 
 
 //Hashtable functions----------------------------------------------------------------------------------------------------------
@@ -96,4 +97,42 @@ int64_t get_thread_id(access* entry_point) {
     UNLOCK(&entry_point->header.lock);
 
     return thread_id;
+}
+
+
+//update header_counter with trylock
+int32_t header_update(access* entry, hashtable* b, int32_t count, int64_t id_ptr) {
+
+    //if the header is the same as the header stored in the thread update, if not
+    //an expansion already occured for the previous table and we're in a new table, ops are invalid
+    if((b->header.n_buckets == entry->header.insert_count[id_ptr].header) && !(b->header.mode)) {
+
+        //only lock if header is the same and has not begin expanding
+        if (!TRY_LOCK(&b->header.lock)) {
+            entry->header.insert_count[id_ptr].ht_header_lock_count++;
+
+            //recheck for expansion after gaining lock
+            if (!(b->header.mode)) {
+                b->header.n_ele+= entry->header.insert_count[id_ptr].count;
+                //printf("updated! %ld \n",b->header.n_ele);
+            }
+            else {
+                //expansion already occuring this way it won't check for expansion when leaving
+                count = 0;
+            }
+    
+            entry->header.insert_count[id_ptr].count = 0;
+            entry->header.insert_count[id_ptr].ops = 0;
+    
+            UNLOCK(&b->header.lock);
+        }
+    }
+    else {
+        //if the header is not the same, update the header (don't need a lock to read this, this attribute never changes)
+        entry->header.insert_count[id_ptr].header = b->header.n_buckets;
+        entry->header.insert_count[id_ptr].count = 0;
+        entry->header.insert_count[id_ptr].ops = 0;
+    }
+
+    return count;
 }

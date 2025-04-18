@@ -80,10 +80,12 @@ hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
                 //*node_count;
             }
         UNLOCK(&newB->header.lock);
+
+        //reset thread counter
+        entry->header.insert_count[id_ptr].count = 0;
+        entry->header.insert_count[id_ptr].ops = 0;
     }
-    //reset thread counter
-    entry->header.insert_count[id_ptr].count = 0;
-    entry->header.insert_count[id_ptr].ops = 0;
+
 
     return newB;
 }
@@ -138,8 +140,8 @@ hashtable* find_bucket_write(hashtable* b,size_t value) {
 }
 
 int64_t delete(access* entry,size_t value, int64_t id_ptr) {
-    hashtable* b = entry->ht;
-    b = find_bucket_write(b,value);
+
+    hashtable* b = find_bucket_write(entry->ht,value);
 
     size_t h = value & (b->header.n_buckets)-1;
     //hash(value,b->header.n_buckets);
@@ -166,30 +168,10 @@ int64_t delete(access* entry,size_t value, int64_t id_ptr) {
 
             //only update after certain nr of operations (UPDATE) have been done 
             if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
-                
-                //if the header is the same as the header stored in the thread update, if not
-                //an expansion already occured for the previous table and we're in a new table, ops are invalid
-                if((b->header.n_buckets == entry->header.insert_count[id_ptr].header) && !(b->header.mode)) {
-                    entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
-                    WRITE_LOCK(&b->header.lock);
-
-                    //check for expansion
-                    if (!(b->header.mode)) {
-                        b->header.n_ele+= entry->header.insert_count[id_ptr].count;
-                    }    
-                    
-                    UNLOCK(&b->header.lock);
-                }
-                else {
-                    //if the header is not the same, update the header
-                    entry->header.insert_count[id_ptr].header = b->header.n_buckets;
-                }
-
-                //in any case, reset to 0 (either it dumped the count, or the count is irrelevant due to ht expansion)
-                entry->header.insert_count[id_ptr].count = 0;
-                entry->header.insert_count[id_ptr].ops = 0;
+                int32_t count = 0;
+                count = header_update(entry,b,count,id_ptr);
             }
+
             return 1;
         }
 
@@ -219,6 +201,12 @@ int64_t search(access* entry, size_t value, int64_t id_ptr) {
     while(cur != (void*)b) {
         if(cur->value == value) {
             UNLOCK(bucket_lock);  
+            
+            if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
+                int32_t count = 0;
+                count = header_update(entry,b,count,id_ptr);
+            }
+            
             return 1;
         }
         prev = cur;
@@ -226,8 +214,15 @@ int64_t search(access* entry, size_t value, int64_t id_ptr) {
     }
     
     UNLOCK(bucket_lock);  
+
+    if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
+        //search doesn't need count
+        int32_t count = 0;
+        header_update(entry,b,count,id_ptr);
+    }
     return 0;
 }
+
 
 int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
     
@@ -242,7 +237,7 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
     node* cur = (&b->bucket)[h].first;
     node* prev = cur;
 
-    int64_t count = 1;
+    int32_t count = 1;
 
     //get to end of bucket array
     while(cur != (void*)b) {
@@ -272,38 +267,9 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
     entry->header.insert_count[id_ptr].count++;
     entry->header.insert_count[id_ptr].ops++;
 
-
     //only update after certain nr of operations (UPDATE) have been done 
     if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
-        //printf("updating: %ld \n",entry->header.insert_count[id_ptr].count);
-
-        //if the header is the same as the header stored in the thread update, if not
-        //an expansion already occured for the previous table and we're in a new table, ops are invalid
-        if((b->header.n_buckets == entry->header.insert_count[id_ptr].header) && !(b->header.mode)) {
-            entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
-            //only lock if header is the same and has not begin expanding
-            WRITE_LOCK(&b->header.lock);
-
-            //recheck for expansion after gaining lock
-            if (!(b->header.mode)) {
-                b->header.n_ele+= entry->header.insert_count[id_ptr].count;
-                //printf("updated! %ld \n",b->header.n_ele);
-            }
-            else {
-                //expansion already occuring this way it won't check for expansion when leaving
-                count = 0;
-            }
-            UNLOCK(&b->header.lock);
-        }
-        else {
-            //if the header is not the same, update the header (don't need a lock to read this, this attribute never changes)
-            entry->header.insert_count[id_ptr].header = b->header.n_buckets;
-        }
-
-        //in any case, reset to 0 (either it dumped the count, or the count is irrelevant due to ht expansion)
-        entry->header.insert_count[id_ptr].count = 0;
-        entry->header.insert_count[id_ptr].ops = 0;
+        count = header_update(entry,b,count,id_ptr);
     }
 
     return count;
@@ -329,9 +295,9 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
                 hashtable* oldb = b;
                 b = HashExpansion(b,entry,id_ptr);
                 
-                //signal expansion is finished
                 entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
+                
+                //signal expansion is finished
                 WRITE_LOCK(&oldb->header.lock);
                 oldb->header.mode = 2;
                 UNLOCK(&oldb->header.lock);

@@ -69,38 +69,36 @@ void *bench_worker(void *entry_point)
 		value = rng * GOLD_RATIO;
 		//printf("value: %llu rng: %llu limit_sf: %llu limit_r: %llu limit_i: %llu \n", value, rng, limit_sf, limit_r, limit_i);
 		if(rng < limit_sf){
-
-#if DEBUG
-//			assert(search(entry->ht,value,entry_point)==1);
-
-			assert(search(entry,value,thread_id)==1);
-#else
-
-			//search(entry->ht,value,thread_id);
-
-			search(entry,value,thread_id);
-
-#endif
+			//search find
+			#if DEBUG
+				int res =search(entry,value,thread_id);
+				if(!res) {
+					FILE* f = fopen("test.txt","w");
+					fprintf(f,"Couldn't Find Value: %lld \n",value);
+					imprimir_hash(entry->ht,f);
+					fclose(f);
+				}
+				
+				assert(res==1);
+			#else
+						search(entry,value,thread_id);
+			#endif
 		}
 		else if(rng < limit_r){
-			//lfht_remove(head, value, thread_id);
-            //main_hash(ht,value,value%test_size,thread_id,r_n_elem,1);
-			//delete(entry->ht,value,thread_id);
+			//remove
 			delete(entry,value,thread_id);
 		}
 		else if(rng < limit_i){
+			//insert
 			main_hash(entry,value,thread_id);
 		}
 		else{
-#if DEBUG
-
-			assert(search(entry,value,thread_id)==0);
-
-#else
-
-			search(entry,value,thread_id);
-
-#endif
+			//search miss
+			#if DEBUG
+				assert(search(entry,value,thread_id)==0);
+			#else
+				search(entry,value,thread_id);
+			#endif
 		}
 	}
 	//lfht_end_thread(head, thread_id);
@@ -164,7 +162,7 @@ void stats() {
 		moda[i] = 0;
 	}
 
-	for(int i=0; i<MAXTHREADS; i++) {
+	for(int i=0; i<n_threads; i++) {
 		if(entry->header.insert_count[i].header == entry->ht->header.n_buckets) {
 			total_elements += entry->header.insert_count[i].count;
 			header_access +=entry->header.insert_count[i].ht_header_lock_count;

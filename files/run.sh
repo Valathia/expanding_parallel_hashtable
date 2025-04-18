@@ -49,37 +49,37 @@ N_ELEM=${@:$OPTIND+1:1}
 VERSION=${@:$OPTIND+2:1}
 
 
-gcc -c expht_${VERSION}.c ${LOCK} -o expht.o
+gcc -c -Wshadow expht_${VERSION}.c ${LOCK} -o expht.o
 ar rcu libexpht.a expht.o
 
 case $VERSION in
     a)
         printf "picked version a\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench
+        gcc -Wshadow bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench
     ;;
     b)
         printf "picked version b\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench
+        gcc -Wshadow bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench
     ;;
     c)
         printf "picked version c\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench   
+        gcc -Wshadow bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench   
     ;;
     d)
         printf "picked version d\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
+        gcc -Wshadow  bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
     ;;
     e)
         printf "picked version e\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
+        gcc -Wshadow bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
     ;;
     f)
         printf "picked version f\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench   
+        gcc -Wshadow bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench   
     ;;
     g)
         printf "picked version g\n"
-        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
+        gcc -Wshadow bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
     ;;
     *)
         printf "I need to know which version of the struct you wanna use mate \n"

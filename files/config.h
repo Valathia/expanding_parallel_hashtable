@@ -27,14 +27,14 @@
     #define UNLOCK pthread_mutex_unlock
     #define WRITE_LOCK pthread_mutex_lock
     #define READ_LOCK pthread_mutex_lock
-
+    #define TRY_LOCK pthread_mutex_trylock
 #else 
     #define LOCKS pthread_rwlock_t
     #define LOCK_INIT pthread_rwlock_init
     #define UNLOCK pthread_rwlock_unlock
     #define WRITE_LOCK pthread_rwlock_wrlock
     #define READ_LOCK pthread_rwlock_rdlock
-
+    #define TRY_LOCK pthread_rwlock_trywrlock
 #endif
 
 #ifdef ARRAY 
@@ -100,7 +100,7 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr);
 int64_t search(access* entry,size_t value, int64_t id_ptr);
 int64_t delete(access* entry,size_t value, int64_t id_ptr);
 int64_t get_thread_id(access* entry);
-void imprimir_hash(hashtable* ht);
+void imprimir_hash(hashtable* ht, FILE* f);
 
 #ifdef ARRAY
     int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr);
