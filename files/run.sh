@@ -77,6 +77,10 @@ case $VERSION in
         printf "picked version f\n"
         gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench   
     ;;
+    g)
+        printf "picked version g\n"
+        gcc bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
+    ;;
     *)
         printf "I need to know which version of the struct you wanna use mate \n"
         exit 1

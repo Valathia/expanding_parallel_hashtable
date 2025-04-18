@@ -10,7 +10,7 @@ size_t* expand_insert(hashtable* b, size_t value, size_t h, int64_t id_ptr) {
     size_t* new_bucket = (size_t*)malloc(sizeof(size_t)*newsize);
 
     int i=0;
-    while(old_bucket[i] < value && i<(&b->bucket)[h].n) {
+    while((old_bucket[i] < value) && (i<(&b->bucket)[h].n)) {
         new_bucket[i] = old_bucket[i];
         i++;
     }
@@ -101,7 +101,7 @@ hashtable* HashExpansion(hashtable* b,  access* entry, int64_t id_ptr) {
     }
 
     // Last update/ forced sync
-    if (entry->header.insert_count[id_ptr].count > 0) {
+    if ((entry->header.insert_count[id_ptr].count > 0) && !(newB->header.mode)) {
         entry->header.insert_count[id_ptr].ht_header_lock_count++;
 
         WRITE_LOCK(&newB->header.lock);
@@ -213,7 +213,7 @@ int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
             i++;
         }
 
-        //if inside current valid space
+        //if inside current valid space (check this first, random trash could per chance be equal to the value we're trying to insert just out of bound)
         if(i<(&b->bucket)[h].n) {
             //shimmy the values to the right and insert
             if((&b->bucket)[h].array[i] != value) {

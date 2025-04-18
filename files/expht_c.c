@@ -48,7 +48,7 @@ hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
     int64_t i=0;
     node* node_mask = (void*)(uint64_t*)((uint64_t)newB | 1);
 
-    //update thread counter for new header before STARTING
+    //update thread counter for new header BEFORE starting
     entry->header.insert_count[id_ptr].header = newK;
     entry->header.insert_count[id_ptr].count = 0;
     entry->header.insert_count[id_ptr].ops = 0;
@@ -182,7 +182,7 @@ int64_t delete(access* entry,size_t value, int64_t id_ptr) {
                     UNLOCK(&b->header.lock);
                 }
                 else {
-                    //if the header is not the same, update the header and update the current op (since we already have the lock)
+                    //if the header is not the same, update the header
                     entry->header.insert_count[id_ptr].header = b->header.n_buckets;
                 }
 

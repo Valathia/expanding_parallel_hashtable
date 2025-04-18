@@ -56,34 +56,40 @@ hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
 
     while (i < oldK) {
 
-        //substituir o cas por um if
-        WRITE_LOCK(&((&oldB->bucket)[i].lock_b));
-        
-        if ((&oldB->bucket)[i].first != (void*)b) { //&& (&oldB->bucket)[i].first != node_mask
-            
-            adjustNodes((&oldB->bucket)[i].first,newB,oldB,entry,id_ptr);
-            
-        }  
+        if(!is_bucket_array((&oldB->bucket)[i].first)) {
 
-        (&oldB->bucket)[i].first = node_mask;
-        UNLOCK(&((&oldB->bucket)[i].lock_b));
+            WRITE_LOCK(&((&oldB->bucket)[i].lock_b));
+            
+            if ((&oldB->bucket)[i].first != (void*)b) { //&& (&oldB->bucket)[i].first != node_mask
+                
+                adjustNodes((&oldB->bucket)[i].first,newB,oldB,entry,id_ptr);
+                
+            }  
 
+            //resheck bucket for double expansion, just to be safe
+            if(!is_bucket_array((&oldB->bucket)[i].first)) {
+                (&oldB->bucket)[i].first = node_mask;
+            }
+
+            UNLOCK(&((&oldB->bucket)[i].lock_b));
+        }
         i++;
     }
 
+    // Last update/ forced sync
     if ((entry->header.insert_count[id_ptr].count > 0) && !(newB->header.mode)) { 
-        // dump last ops in header
         entry->header.insert_count[id_ptr].ht_header_lock_count++;
+        
         WRITE_LOCK(&newB->header.lock);
             if(!(newB->header.mode)) {
                 newB->header.n_ele += entry->header.insert_count[id_ptr].count;
-                //*node_count;
             }
         UNLOCK(&newB->header.lock);
+
+        //reset thread counter if still in the same table (the thread could already be in a table ahead and as such, shouldn't be reset)
+        entry->header.insert_count[id_ptr].count = 0;
+        entry->header.insert_count[id_ptr].ops = 0;
     }
-    //reset thread counter
-    entry->header.insert_count[id_ptr].count = 0;
-    entry->header.insert_count[id_ptr].ops = 0;
 
     return newB;
 }
@@ -138,9 +144,9 @@ hashtable* find_bucket_write(hashtable* b,size_t value) {
 }
 
 int64_t delete(access* entry,size_t value, int64_t id_ptr) {
-    hashtable* b = entry->ht;
-    b = find_bucket_write(b,value);
 
+    hashtable* b = find_bucket_write(entry->ht,value);
+    
     size_t h = value & (b->header.n_buckets)-1;
     //hash(value,b->header.n_buckets);
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
@@ -171,6 +177,7 @@ int64_t delete(access* entry,size_t value, int64_t id_ptr) {
                 //an expansion already occured for the previous table and we're in a new table, ops are invalid
                 if((b->header.n_buckets == entry->header.insert_count[id_ptr].header) && !(b->header.mode)) {
                     entry->header.insert_count[id_ptr].ht_header_lock_count++;
+                    
                     WRITE_LOCK(&b->header.lock);
 
                     //check for expansion
