@@ -69,24 +69,7 @@ hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
 
         i++;
     }
-
-    if ((entry->header.insert_count[id_ptr].count > 0) && !(newB->header.mode)) { 
-        // dump last ops in header
-        entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
-        WRITE_LOCK(&newB->header.lock);
-            if(!(newB->header.mode)) {
-                newB->header.n_ele += entry->header.insert_count[id_ptr].count;
-                //*node_count;
-            }
-        UNLOCK(&newB->header.lock);
-
-        //reset thread counter
-        entry->header.insert_count[id_ptr].count = 0;
-        entry->header.insert_count[id_ptr].ops = 0;
-    }
-
-
+    
     return newB;
 }
 
@@ -296,7 +279,7 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
                 b = HashExpansion(b,entry,id_ptr);
                 
                 entry->header.insert_count[id_ptr].ht_header_lock_count++;
-                
+
                 //signal expansion is finished
                 WRITE_LOCK(&oldb->header.lock);
                 oldb->header.mode = 2;

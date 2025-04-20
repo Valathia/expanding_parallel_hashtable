@@ -27,7 +27,6 @@ size_t	limit_sf,
 int test_size,
     n_threads;
 
-//struct lfht_head *head;
 access* entry ;
 
 
@@ -36,19 +35,16 @@ void *prepare_worker(void *entry_point)
 
 	int64_t thread_id = get_thread_id(entry);
 
-	//int thread_id = lfht_init_thread(head);
-	//printf("test size: %d # threads: %d\n",test_size,n_threads);
 	for(int i=0; i<test_size/n_threads; i++){
 		size_t rng,
                 value;
-		//isto aqui estava como long int
-		lrand48_r(entry_point, (long int *) &rng);
+
+				lrand48_r(entry_point, (long int *) &rng);
 		value = rng * GOLD_RATIO;
-		//printf("value: %d table size: %d \n",value,entry->ht->header.n_buckets);
+
 		if(rng < limit_r)
             // 		 ht, key, value, id_ptr, elem, instruction...
 			main_hash(entry,value,thread_id);
-			//lfht_insert(head, value, (void*)value, thread_id);
 	}
 	//lfht_end_thread(head, thread_id);
 	return NULL;
@@ -57,7 +53,6 @@ void *prepare_worker(void *entry_point)
 void *bench_worker(void *entry_point)
 {
 
-	//int thread_id = lfht_init_thread(head);
 	int thread_limit = test_size/n_threads;
 
 	int64_t thread_id = get_thread_id(entry);
@@ -67,14 +62,14 @@ void *bench_worker(void *entry_point)
 		    	value;
 		lrand48_r(entry_point, (long int *) &rng);
 		value = rng * GOLD_RATIO;
-		//printf("value: %llu rng: %llu limit_sf: %llu limit_r: %llu limit_i: %llu \n", value, rng, limit_sf, limit_r, limit_i);
+
 		if(rng < limit_sf){
 			//search find
 			#if DEBUG
 				int res =search(entry,value,thread_id);
 				if(!res) {
 					FILE* f = fopen("test.txt","w");
-					fprintf(f,"Couldn't Find Value: %lld \n",value);
+					fprintf(f,"Couldn't Find Value: %zu \n",value);
 					imprimir_hash(entry->ht,f);
 					fclose(f);
 				}
@@ -107,7 +102,6 @@ void *bench_worker(void *entry_point)
 #if DEBUG
 void *test_worker(void *entry_point)
 {
-	//int thread_id = lfht_init_thread(head);
 
 	int64_t thread_id = get_thread_id(entry);
 
@@ -173,6 +167,7 @@ void stats() {
 		for(int i=0; i<table_size; i++) {
 			aux = (&ht->bucket)[i].n;
 			aux_exp = (&ht->bucket)[i].size;
+			moda[aux] += 1;
 
 			if (aux > 0) {
 				if(aux > max_size) {
@@ -214,6 +209,8 @@ void stats() {
 				list_size+=aux;
 			}
 		}
+		max_exp = max_size;
+		min_exp = min_size;
 	#endif
 	int max_mode = moda[0];
 	int max_i = 0;
@@ -237,9 +234,11 @@ void stats() {
 	printf("Elements Actual: %ld\n",list_size);
 	printf("Largest Element Size: %ld\n",max_size);
 	printf("Smallest Element Size: %ld\n",min_size);
-	printf("Average Element Size: %lf\n",(float)list_size/(float)table_size);
+	printf("Load Factor: %lf\n",(float)list_size/(float)table_size);
 	printf("Largest Bucket Size: %ld\n",max_exp);
 	printf("Smallest Bucket Size: %ld\n",min_exp);
+	printf("# Buckets at Largest Size: %ld\n",moda[max_size]);
+	printf("# Buckets at Smallest Size: %ld\n",moda[min_size] + moda[0]);	
 	printf("Average Bucket Size: %lf\n", (float)exp_size/(float)table_size);
 	printf("Header Access Total: %ld\n",header_access);
 	printf("Header Access Average: %lf\n",(float)header_access/(float)n_threads);
@@ -283,13 +282,9 @@ int main(int argc, char **argv)
 
 	entry = create_acess(INIT_SIZE,n_threads);
 
-	//printf("Table created\n");
-	
 	for(int64_t i=0; i<n_threads; i++)
 		seed[i] = aligned_alloc(64, 64);
 	
-	//printf("seeded \n");
-
 	if(limit_r!=0){
 		for(int64_t i=0; i<n_threads; i++){
 			srand48_r(i, seed[i]);
@@ -303,8 +298,6 @@ int main(int argc, char **argv)
 	printf("starting test\n");
 	entry->header.thread_id = 0;
 	
-	//imprimir_hash(ht);
-
 	clock_gettime(CLOCK_MONOTONIC_RAW, &start_monoraw);
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_process);
 	

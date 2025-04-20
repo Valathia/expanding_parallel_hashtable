@@ -71,23 +71,6 @@ hashtable* HashExpansion(hashtable* b,  access* entry, int64_t id_ptr) {
         UNLOCK(&((&oldB->bucket)[i].lock_b));
         i++;
     }
-
-    // Last update/ forced sync
-    if ((entry->header.insert_count[id_ptr].count > 0) && !(newB->header.mode)) {
-        entry->header.insert_count[id_ptr].ht_header_lock_count++;
-        
-        WRITE_LOCK(&newB->header.lock);
-
-        if(!(newB->header.mode)) {
-            newB->header.n_ele += entry->header.insert_count[id_ptr].count;
-        }
-
-        UNLOCK(&newB->header.lock);
-    }
-
-    //reset thread counter
-    entry->header.insert_count[id_ptr].count = 0;
-    entry->header.insert_count[id_ptr].ops = 0;
     
     return newB;
 }

@@ -1,47 +1,6 @@
 #include "array_functions.h"
 
 //---------------------------------------------------------------------------------------------------------------
-
-//update header_counter with trylock
-int32_t header_update(access* entry, hashtable* b, int32_t count, int64_t id_ptr) {
-
-    //if the header is the same as the header stored in the thread update, if not
-    //an expansion already occured for the previous table and we're in a new table, ops are invalid
-    if((b->header.n_buckets == entry->header.insert_count[id_ptr].header) && !(b->header.mode)) {
-
-        //only lock if header is the same and has not begin expanding
-        if (!TRY_LOCK(&b->header.lock)) {
-            entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
-            //recheck for expansion after gaining lock
-            if (!(b->header.mode)) {
-                b->header.n_ele+= entry->header.insert_count[id_ptr].count;
-                //printf("updated! %ld \n",b->header.n_ele);
-            }
-            else {
-                //expansion already occuring this way it won't check for expansion when leaving
-                count = 0;
-            }
-    
-            entry->header.insert_count[id_ptr].count = 0;
-            entry->header.insert_count[id_ptr].ops = 0;
-    
-            UNLOCK(&b->header.lock);
-        }
-    }
-    else {
-        //if the header is not the same, update the header (don't need a lock to read this, this attribute never changes)
-        entry->header.insert_count[id_ptr].header = b->header.n_buckets;
-        entry->header.insert_count[id_ptr].count = 0;
-        entry->header.insert_count[id_ptr].ops = 0;
-    }
-
-    return count;
-}
-
-
-
-
 size_t* expand_insert(hashtable* b, size_t value, size_t h, int64_t id_ptr) {
     size_t* old_bucket = (&b->bucket)[h].array;
     int64_t newsize = (&b->bucket)[h].size*2;
@@ -115,23 +74,6 @@ hashtable* HashExpansion(hashtable* b,  access* entry, int64_t id_ptr) {
             UNLOCK(&((&oldB->bucket)[i].lock_b));
         }
         i++;
-    }
-
-    // Last update/ forced sync
-    if ((entry->header.insert_count[id_ptr].count > 0) && !(newB->header.mode)) {
-        entry->header.insert_count[id_ptr].ht_header_lock_count++;
-        
-        WRITE_LOCK(&newB->header.lock);
-
-        if(!(newB->header.mode)) {
-            newB->header.n_ele += entry->header.insert_count[id_ptr].count;
-        }
-
-        UNLOCK(&newB->header.lock);
-        
-        //reset thread counter if still in the same table
-        entry->header.insert_count[id_ptr].count = 0;
-        entry->header.insert_count[id_ptr].ops = 0;
     }
 
     return newB;
@@ -211,7 +153,7 @@ int64_t search(access* entry, size_t value, int64_t id_ptr) {
             //search doesn't use counts return value. BUT IT DOES USE SIZE
             int32_t count = 0;
             header_update(entry,b, count, id_ptr);
-        }
+        }   
     }
 
 

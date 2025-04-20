@@ -68,13 +68,12 @@ hashtable* create_table(int64_t s) {
 access* create_acess(int64_t s, int64_t n_threads) {
     access* entry = (access*) malloc(sizeof(access));
     entry->ht = create_table(s);
-    //entry->header.insert_count = (counter*)malloc(sizeof(counter)*MAXTHREADS);
 
     LOCK_INIT( &entry->header.lock, NULL);
     LOCK_INIT( &entry->lock,NULL);
     entry->header.thread_id = 0;
 
-    for(int64_t i=0; i<MAXTHREADS; i++) {
+    for(int64_t i=0; i<n_threads; i++) {
         //printf("header counter %ld : %p = 0 \n",i, &entry->header.insert_count[i]);
         entry->header.insert_count[i].count = 0;
         entry->header.insert_count[i].ops = 0;

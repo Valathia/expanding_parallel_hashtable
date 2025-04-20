@@ -146,7 +146,7 @@ access* create_acess(int64_t s, int64_t n_threads) {
     //entry->header.insert_count = (counter*)malloc(sizeof(counter)*MAXTHREADS);
     LOCK_INIT( &entry->header.lock, NULL);
     LOCK_INIT( &entry->lock, NULL);
-    for(int64_t i=0; i<MAXTHREADS; i++) {
+    for(int64_t i=0; i<n_threads; i++) {
         //printf("header counter %ld : %p = 0 \n",i, &entry->header.insert_count[i]);
         entry->header.insert_count[i].count = 0;
         entry->header.insert_count[i].ops = 0;

@@ -24,6 +24,7 @@ files/run_base.sh
 sibila_array_addresses.txt
 files/expht_b.c
 files/headers.txt
+test.txt
 
 #data crunching
 data/

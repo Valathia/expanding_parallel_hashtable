@@ -11,7 +11,7 @@
 	#include "../cenas_instaladas/include/jemalloc/jemalloc.h"
 #endif
 
-#define TRESH 4
+#define TRESH 2
 
 #define ARRAY_INIT_SIZE 8
 
@@ -44,7 +44,7 @@
         int64_t n;
         int64_t size;
     }BUCKET;
-#else
+#else 
     typedef struct __attribute__ ((aligned(64))) node {
         size_t value;
         struct node* next;
