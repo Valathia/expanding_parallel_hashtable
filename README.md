@@ -23,12 +23,14 @@ this equates to: 10 all inserts, 10 all deletes, 10 all hits , 10 all misses and
 
 - a: Default Expandable Hashtable w/ Nodes
 
-- c: Expandable Hashtable w/ Nodes & Delayed Updates
+- b: Expandable Hashtable w/ Nodes & Delayed Updates
 
-- d: Expandable Hashtable w/ Ordered Arrays & Delayed Updates
+- c: Expandable Hashtable w/ Nodes & Delayed Updates & Lazy-Coop Expansion
+
+- d: Expandable Hashtable w/ Ordered Arrays & Delayed Updates & Full-Coop Expansion (not stable)
 
 - e: Expandable Hashtable w/ Unordered Arrays & Delayed Updates
 
-- f: Expandable Hashtable w/ Nodes & Delayed Updates & Semi Co-op expansion
+- f: Expandable Hashtable w/ Unordered Arrays & Delayed Updates & Lazy-Coop Expansion
 
-- g: Expandable Hashtable w/ Unordered Arrays & Delayed Updates & Semi Co-op expansion
+- g: Expandable Hashtable w/ Unordered Arrays & Delayed Updates & Full-Coop Expansion (not stable)
