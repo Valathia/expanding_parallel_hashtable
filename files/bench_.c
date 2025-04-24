@@ -151,12 +151,12 @@ void stats() {
 	int64_t exp_size = 0;
 	int64_t header_access = 0;
 	//n_elementos
-	int64_t moda[64];
-	for(int i=0; i<64;i++) {
+	int64_t moda[128];
+	for(int64_t i=0; i<128;i++) {
 		moda[i] = 0;
 	}
 
-	for(int i=0; i<n_threads; i++) {
+	for(int64_t i=1; i<n_threads+1; i++) {
 		if(entry->header.insert_count[i].header == entry->ht->header.n_buckets) {
 			total_elements += entry->header.insert_count[i].count;
 			header_access +=entry->header.insert_count[i].ht_header_lock_count;
@@ -164,7 +164,7 @@ void stats() {
 	}
 	
 	#ifdef ARRAY
-		for(int i=0; i<table_size; i++) {
+		for(int64_t i=0; i<table_size; i++) {
 			aux = (&ht->bucket)[i].n;
 			aux_exp = (&ht->bucket)[i].size;
 			moda[aux] += 1;
@@ -194,7 +194,7 @@ void stats() {
 			
 		}
 	#else 
-		for(int i=0; i<table_size; i++) {
+		for(int64_t i=0; i<table_size; i++) {
 			aux = bucket_size((&ht->bucket)[i].first,ht);
 			moda[aux] += 1;
 			if (aux > 0) {
@@ -212,11 +212,11 @@ void stats() {
 		max_exp = max_size;
 		min_exp = min_size;
 	#endif
-	int max_mode = moda[0];
-	int max_i = 0;
-	int min_mode = moda[0];
-	int min_i = 0;
-	for(int i=0; i<64;i++) {
+	int64_t max_mode = moda[0];
+	int64_t max_i = 0;
+	int64_t min_mode = moda[0];
+	int64_t min_i = 0;
+	for(int64_t i=0; i<64;i++) {
 		if(moda[i] > max_mode) {
 			max_mode = moda[i];
 			max_i = i; 
@@ -296,7 +296,7 @@ int main(int argc, char **argv)
 	}
 	
 	printf("starting test\n");
-	entry->header.thread_id = 0;
+	entry->header.thread_id = (int64_t)1;
 	
 	clock_gettime(CLOCK_MONOTONIC_RAW, &start_monoraw);
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_process);
@@ -325,7 +325,7 @@ int main(int argc, char **argv)
 
 #if DEBUG
 
-	entry->header.thread_id = 0;
+	entry->header.thread_id = (int64_t)1;
 
 	for(int64_t i=0; i<n_threads; i++){
 		srand48_r(i, seed[i]);

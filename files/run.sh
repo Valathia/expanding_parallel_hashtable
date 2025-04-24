@@ -67,7 +67,7 @@ case $VERSION in
     ;;
     d)
         printf "picked version d\n"
-        gcc -Wshadow  bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
+        gcc -Wshadow  bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench   
     ;;
     e)
         printf "picked version e\n"
@@ -75,7 +75,7 @@ case $VERSION in
     ;;
     f)
         printf "picked version f\n"
-        gcc -Wshadow bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -lpthread -o bench   
+        gcc -Wshadow bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
     ;;
     g)
         printf "picked version g\n"
@@ -83,7 +83,7 @@ case $VERSION in
     ;;
     h)
         printf "picked version h\n"
-        gcc -Wshadow bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAYPROG=1 -lpthread -o bench   
+        gcc -Wshadow bench_.c libexpht.a -O3 ${DEBUG_FLAG} ${LOCK} -DARRAY=1 -lpthread -o bench   
     ;;
     *)
         printf "I need to know which version of the struct you wanna use mate \n"

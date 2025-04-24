@@ -142,7 +142,7 @@ void imprimir_hash(hashtable* ht, FILE* f) {
 access* create_acess(int64_t s, int64_t n_threads) {
     access* entry = (access*) malloc(sizeof(access));
     entry->ht = create_table(s);
-    entry->header.thread_id = 0;
+    entry->header.thread_id = 1;
     //entry->header.insert_count = (counter*)malloc(sizeof(counter)*MAXTHREADS);
     LOCK_INIT( &entry->header.lock, NULL);
     LOCK_INIT( &entry->lock, NULL);
@@ -161,7 +161,7 @@ int64_t get_thread_id(access* entry_point) {
     WRITE_LOCK(&entry_point->header.lock);
     
     //printf("lock \n");
-	int thread_id = entry_point->header.thread_id;
+	int64_t thread_id = entry_point->header.thread_id;
     entry_point->header.thread_id++;
     //printf("Thread ID: %d \n",thread_id);
     
@@ -171,7 +171,7 @@ int64_t get_thread_id(access* entry_point) {
 }
 
 //update header_counter with trylock
-int32_t header_update(access* entry, hashtable* b, int32_t count, int64_t id_ptr) {
+int64_t header_update(access* entry, hashtable* b, int64_t count, int64_t id_ptr) {
 
     //if the header is the same as the header stored in the thread update, if not
     //an expansion already occured for the previous table and we're in a new table, ops are invalid

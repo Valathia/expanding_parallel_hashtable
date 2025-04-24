@@ -71,7 +71,7 @@ access* create_acess(int64_t s, int64_t n_threads) {
 
     LOCK_INIT( &entry->header.lock, NULL);
     LOCK_INIT( &entry->lock,NULL);
-    entry->header.thread_id = 0;
+    entry->header.thread_id = 1;
 
     for(int64_t i=0; i<n_threads; i++) {
         //printf("header counter %ld : %p = 0 \n",i, &entry->header.insert_count[i]);
@@ -89,7 +89,7 @@ int64_t get_thread_id(access* entry_point) {
     WRITE_LOCK(&entry_point->header.lock);
     
     //printf("lock \n");
-	int thread_id = entry_point->header.thread_id;
+	int64_t thread_id = entry_point->header.thread_id;
     entry_point->header.thread_id++;
     //printf("Thread ID: %d \n",thread_id);
     

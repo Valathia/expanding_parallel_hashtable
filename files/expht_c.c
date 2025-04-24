@@ -15,7 +15,7 @@
 // -- can be called with jemalloc instead
 // same as struct a with less updates ( with correct insert function) -> struct c
 // same as c with force spacing in the counter array due to false sharing (id_ptr*8 per thread, max 32 threads)
-
+// COOP
 
 //---------------------------------------------------------------------------------------------------------------
 
@@ -48,6 +48,7 @@ hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
     int64_t i=0;
     node* node_mask = (void*)(uint64_t*)((uint64_t)newB | 1);
 
+
     //update thread counter for new header BEFORE starting
     entry->header.insert_count[id_ptr].header = newK;
     entry->header.insert_count[id_ptr].count = 0;
@@ -55,21 +56,26 @@ hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
 
     while (i < oldK) {
 
-        //substituir o cas por um if
-        WRITE_LOCK(&((&oldB->bucket)[i].lock_b));
-        
-        if ((&oldB->bucket)[i].first != (void*)b) { //&& (&oldB->bucket)[i].first != node_mask
-            
-            adjustNodes((&oldB->bucket)[i].first,newB,oldB,entry,id_ptr);
-            
-        }  
+        if(!is_bucket_array((&oldB->bucket)[i].first)) {
 
-        (&oldB->bucket)[i].first = node_mask;
-        UNLOCK(&((&oldB->bucket)[i].lock_b));
+            WRITE_LOCK(&((&oldB->bucket)[i].lock_b));
+            
+            if ((&oldB->bucket)[i].first != (void*)b) { //&& (&oldB->bucket)[i].first != node_mask
+                
+                adjustNodes((&oldB->bucket)[i].first,newB,oldB,entry,id_ptr);
+                
+            }  
 
+            //resheck bucket for double expansion, just to be safe
+            if(!is_bucket_array((&oldB->bucket)[i].first)) {
+                (&oldB->bucket)[i].first = node_mask;
+            }
+
+            UNLOCK(&((&oldB->bucket)[i].lock_b));
+        }
         i++;
     }
-    
+
     return newB;
 }
 
@@ -151,10 +157,10 @@ int64_t delete(access* entry,size_t value, int64_t id_ptr) {
 
             //only update after certain nr of operations (UPDATE) have been done 
             if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
-                int32_t count = 0;
-                count = header_update(entry,b,count,id_ptr);
+                //delete doesn't need count
+                int64_t count = 0;
+                header_update(entry,b,count,id_ptr);
             }
-
             return 1;
         }
 
@@ -184,12 +190,11 @@ int64_t search(access* entry, size_t value, int64_t id_ptr) {
     while(cur != (void*)b) {
         if(cur->value == value) {
             UNLOCK(bucket_lock);  
-            
             if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
-                int32_t count = 0;
-                count = header_update(entry,b,count,id_ptr);
+                //search doesn't need count
+                int64_t count = 0;
+                header_update(entry,b,count,id_ptr);
             }
-            
             return 1;
         }
         prev = cur;
@@ -200,7 +205,7 @@ int64_t search(access* entry, size_t value, int64_t id_ptr) {
 
     if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
         //search doesn't need count
-        int32_t count = 0;
+        int64_t count = 0;
         header_update(entry,b,count,id_ptr);
     }
     return 0;
@@ -220,7 +225,38 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
     node* cur = (&b->bucket)[h].first;
     node* prev = cur;
 
-    int32_t count = 1;
+    int64_t count = 1;
+
+    //if we're already in the hastable with a bucket lock you can't be done with expansion
+    if(b->header.mode) {
+        //you can however, be in the first bucket, in that case you can't know which one is the new table. 
+        //the first bucket also needs to already be pointing to the new table
+        if(h!=0 && is_bucket_array((&b->bucket)[0].first)) {
+
+            //get new hashtable
+            hashtable* newb = (void *)((uint64_t)(&b->bucket)[0].first & ~(1<<0));
+
+            //clear counter if the thread doesn't know about the new header already
+            if(entry->header.insert_count[id_ptr].header <  newb->header.n_buckets) {
+                entry->header.insert_count[id_ptr].count = 0;
+                entry->header.insert_count[id_ptr].ops = 0;
+                entry->header.insert_count[id_ptr].header = newb->header.n_buckets;
+            }
+
+            
+            //move nodes
+            adjustNodes((&b->bucket)[h].first,newb,b,entry,id_ptr);
+            //insert new node into newtable
+            count = insert(newb,entry,n,id_ptr);
+            
+            //set node mask
+            (&b->bucket)[h].first = (&b->bucket)[0].first;
+            b = newb;
+
+            UNLOCK(bucket_lock);
+            return count;
+        }
+    }
 
     //get to end of bucket array
     while(cur != (void*)b) {
@@ -279,10 +315,10 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
                 b = HashExpansion(b,entry,id_ptr);
                 
                 entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
+                
                 //signal expansion is finished
                 WRITE_LOCK(&oldb->header.lock);
-                oldb->header.mode = 2;
+                oldb->header.mode = -1;
                 UNLOCK(&oldb->header.lock);
 
                 WRITE_LOCK(&entry->lock);

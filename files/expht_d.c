@@ -1,126 +1,117 @@
-#include "array_functions.h"
+#include "node_functions.h"
 
+// Locks at buckets - no lock at header expansion
+// - lock header
+// - change mode to 1
+// - unlock header
+// - expand
+// dar unlock do header, e deixar expandir, não altera o comportamento-
+// new NULL = header memory pointer
+// inserts from tail
+// moves nodes 1 by 1 to new table 
+// working for insert, search, delete at the same time
+
+//*** VERSION CHANGES */
+// -- can be called with jemalloc instead
+// same as struct a with less updates ( with correct insert function) -> struct c
+// same as c with force spacing in the counter array due to false sharing (id_ptr*8 per thread, max 32 threads)
+// FULL COOP
 
 //---------------------------------------------------------------------------------------------------------------
 
-size_t* expand_insert(hashtable* b, size_t value, size_t h, int64_t id_ptr) {
-    size_t* old_bucket = (&b->bucket)[h].array;
-    int64_t newsize = (&b->bucket)[h].size*2;
-    //imprimir_array(b,h);
-    size_t* new_bucket = (size_t*)malloc(sizeof(size_t)*newsize);
+//Verifica condição de expansão actualmente:
+//#nodes > #buckets && #nodesnumbucket > threshhold
 
-    int i=0;
-    while((old_bucket[i] < value) && (i<(&b->bucket)[h].n)) {
-        new_bucket[i] = old_bucket[i];
-        i++;
-    }
-    new_bucket[i] = value;
-    int j=i;
-    i++;
+//---------------------------------------------------------------------------------------------------------------
 
-    while(j<(&b->bucket)[h].n) {
-        new_bucket[i] = old_bucket[j];
-        i++;
-        j++;
-    }
+//função do paper que ajusta os nodes -> passa o marking node para o fim de cada bucket. 
+void adjustNodes(node* n, hashtable* b,hashtable* old, access* entry , int64_t id_ptr) {
 
-    (&b->bucket)[h].n = i;
-    (&b->bucket)[h].size = newsize;
-    free(old_bucket);
-    return new_bucket;
-}
-
-//don't have to check if same value has already been inserted
-//already positioned in the correct hashtable
-//values are already being inserted in order
-//need to check for array expansion though
-// void adjustNodes(BUCKET bucket, hashtable* b, int64_t id_ptr) {
-//     size_t h;
-//     int64_t cur_size;
-//     if ( bucket.n != 0 && !is_bucket_array(bucket.array)) { 
-//         for(int i=0; i<bucket.n ; i++) {
-//             h =  bucket.array[i] & (b->header.n_buckets)-1;
-//             cur_size = (&b->bucket)[h].n;
-            
-//             WRITE_LOCK(&(&b->bucket)[h].lock_b);
-//             if(cur_size < (&b->bucket)[h].size) {
-//                 (&b->bucket)[h].array[cur_size] = bucket.array[i];
-//                 (&b->bucket)[h].n++;
-//             }
-//             else {
-//                 (&b->bucket)[h].array = expand_insert(b, bucket.array[i],h,id_ptr);
-//             }
-//             UNLOCK(&(&b->bucket)[h].lock_b);
-//         }
-//     }
-//     return;
-// }
-
-void adjustNodes(BUCKET bucket, hashtable* b, access* entry, int64_t id_ptr) {
-
-
-    if ( bucket.n != 0 && !is_bucket_array(bucket.array)) { 
-        for(int i=0; i<bucket.n ; i++) {
-            insert(b,entry,bucket.array[i],id_ptr);
+    if (n != (void*)old && !is_bucket_array(n)) { 
+        node* chain = n;
+        if ( chain->next != (void*)old && chain->next != (void*)b && !is_bucket_array(chain->next)) {
+            adjustNodes(chain->next,b,old,entry,id_ptr);
         }
+        insert(b,entry,n,id_ptr);
+        
+        return;
     }
     return;
 }
 
 // função de hash expansion
-hashtable* HashExpansion(hashtable* b,  access* entry, int64_t id_ptr) {
+hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
     hashtable* oldB = b;
     int64_t oldK = b->header.n_buckets;
     int64_t newK = 2*oldK;
     hashtable* newB = create_table(newK);
     int64_t i=0;
-    size_t* node_mask = (void*)(uint64_t*)((uint64_t)newB | 1);
+    node* node_mask = (void*)(uint64_t*)((uint64_t)newB | 1);
 
-    //Reset to new table before starting (using regular insert)
+
+    //update thread counter for new header BEFORE starting
+    entry->header.insert_count[id_ptr].header = newK;
     entry->header.insert_count[id_ptr].count = 0;
     entry->header.insert_count[id_ptr].ops = 0;
-    entry->header.insert_count[id_ptr].header = newK;
-
+    entry->header.insert_count[id_ptr].expansion_at_bucket = 0;
     while (i < oldK) {
 
-        //substituir o cas por um if
-        WRITE_LOCK(&((&oldB->bucket)[i].lock_b));
-        
-        if ((&oldB->bucket)[i].n != 0) { //&& (&oldB->bucket)[i].first != node_mask
+        if(!is_bucket_array((&oldB->bucket)[i].first)) {
 
-            adjustNodes((&oldB->bucket)[i],newB,entry,id_ptr);
+            WRITE_LOCK(&((&oldB->bucket)[i].lock_b));
+            
+            if ((&oldB->bucket)[i].first != (void*)b) { //&& (&oldB->bucket)[i].first != node_mask
+                
+                adjustNodes((&oldB->bucket)[i].first,newB,oldB,entry,id_ptr);
+                
+            }  
 
-        }  
+            //resheck bucket for double expansion, just to be safe
+            if(!is_bucket_array((&oldB->bucket)[i].first)) {
+                (&oldB->bucket)[i].first = node_mask;
+            }
 
-        //free old array memory && point to new ht
-        free((&oldB->bucket)[i].array);
-        (&oldB->bucket)[i].array = node_mask;
-
-        UNLOCK(&((&oldB->bucket)[i].lock_b));
+            UNLOCK(&((&oldB->bucket)[i].lock_b));
+        }
+        entry->header.insert_count[id_ptr].expansion_at_bucket++;
         i++;
     }
-
-    // Last update/ forced sync
-    if ((entry->header.insert_count[id_ptr].count > 0) && !(newB->header.mode)) {
-        entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
-        WRITE_LOCK(&newB->header.lock);
-
-        if(!(newB->header.mode)) {
-            newB->header.n_ele += entry->header.insert_count[id_ptr].count;
-        }
-
-        UNLOCK(&newB->header.lock);
-    }
-    //reset thread counter
-    entry->header.insert_count[id_ptr].count = 0;
-    entry->header.insert_count[id_ptr].ops = 0;
-    //entry->header.insert_count[id_ptr].header = newK;
-    
 
     return newB;
 }
 
+void coop_expand(hashtable* oldB, hashtable* newB, node* node_mask, int64_t i, access* entry, int64_t id_ptr) {
+    
+    int64_t oldK = oldB->header.n_buckets;
+
+    //clear counter if the thread doesn't know about the new header already
+    if(entry->header.insert_count[id_ptr].header <  newB->header.n_buckets) {
+        entry->header.insert_count[id_ptr].count = 0;
+        entry->header.insert_count[id_ptr].ops = 0;
+        entry->header.insert_count[id_ptr].header = newB->header.n_buckets;
+    }
+
+    while (i < oldK) {
+
+        if(!is_bucket_array((&oldB->bucket)[i].first)) {
+
+            if(!TRY_LOCK(&((&oldB->bucket)[i].lock_b))) {
+
+                //recheck after gaining the lock
+                if ((&oldB->bucket)[i].first != (void*)oldB && !is_bucket_array((&oldB->bucket)[i].first)) { //&& (&oldB->bucket)[i].first != node_mask
+                    
+                    adjustNodes((&oldB->bucket)[i].first,newB,oldB,entry,id_ptr);
+                    (&oldB->bucket)[i].first = node_mask;
+                }  
+
+                UNLOCK(&((&oldB->bucket)[i].lock_b));
+            }
+        }
+        i++;
+    }
+
+    return;
+}
 
 
 hashtable* find_bucket_read(hashtable* b,size_t value) {
@@ -130,9 +121,9 @@ hashtable* find_bucket_read(hashtable* b,size_t value) {
     READ_LOCK(bucket_lock);
 
     //if bucket is pointing towards a new table, keep going until we find the bucket of the current hashtable
-    while(is_bucket_array((&b->bucket)[h].array)) {
+    while(is_bucket_array((&b->bucket)[h].first)) {
 
-        b = (void *)((uint64_t)(&b->bucket)[h].array & ~(1<<0));
+        b = (void *)((uint64_t)(&b->bucket)[h].first & ~(1<<0));
 
         h = value & (b->header.n_buckets)-1;
         //hash(value,b->header.n_buckets);
@@ -154,9 +145,9 @@ hashtable* find_bucket_write(hashtable* b,size_t value) {
     WRITE_LOCK(bucket_lock);
 
     //if bucket is pointing towards a new table, keep going until we find the bucket of the current hashtable
-    while(is_bucket_array((&b->bucket)[h].array)) {
+    while(is_bucket_array((&b->bucket)[h].first)) {
 
-        b = (void *)((uint64_t)(&b->bucket)[h].array & ~(1<<0));
+        b = (void *)((uint64_t)(&b->bucket)[h].first & ~(1<<0));
 
         h = value & (b->header.n_buckets)-1;
         //hash(value,b->header.n_buckets);
@@ -171,6 +162,53 @@ hashtable* find_bucket_write(hashtable* b,size_t value) {
     return b;
 }
 
+int64_t delete(access* entry,size_t value, int64_t id_ptr) {
+
+    hashtable* b = find_bucket_write(entry->ht,value);
+
+    size_t h = value & (b->header.n_buckets)-1;
+    //hash(value,b->header.n_buckets);
+    LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
+    
+
+    node* cur = (&b->bucket)[h].first;
+    node* prev = cur;
+    
+    while(cur != (void*)b) {
+        if(cur->value == value) {
+            //if node to delete is first
+            if(cur == prev) {
+                (&b->bucket)[h].first = cur->next;
+            }
+            else {
+                prev->next = cur->next;
+            }
+            free(cur);
+            UNLOCK(bucket_lock);
+
+            entry->header.insert_count[id_ptr].count--;
+            entry->header.insert_count[id_ptr].ops++;
+
+            //only update after certain nr of operations (UPDATE) have been done 
+            if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
+                //delete doesn't need count
+                int64_t count = 0;
+                header_update(entry,b,count,id_ptr);
+            }
+            return 1;
+        }
+
+        prev = cur;
+        cur = cur->next;
+    }
+
+
+    //couldn't find value to delete
+    UNLOCK(bucket_lock);  
+    return 0;
+}
+
+
 int64_t search(access* entry, size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
     //get current hashtable where correct bucket is
@@ -179,70 +217,72 @@ int64_t search(access* entry, size_t value, int64_t id_ptr) {
     //hash(value,b->header.n_buckets);
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
     
-    int i = 0;
-    while(value>(&b->bucket)[h].array[i] && i < (&b->bucket)[h].n) {
-        i++;
-    }
+    node* cur = (&b->bucket)[h].first;
+    node* prev = cur;
 
-    size_t stop_value = (&b->bucket)[h].array[i];
-    int64_t size =  (&b->bucket)[h].n;
+    //if bucket where value should be is empty, return 0
+    while(cur != (void*)b) {
+        if(cur->value == value) {
+            UNLOCK(bucket_lock);  
+            if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
+                //search doesn't need count
+                int64_t count = 0;
+                header_update(entry,b,count,id_ptr);
+            }
+            return 1;
+        }
+        prev = cur;
+        cur = cur->next;
+    }
+    
     UNLOCK(bucket_lock);  
 
-    return stop_value==value && i<size;
+    if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
+        //search doesn't need count
+        int64_t count = 0;
+        header_update(entry,b,count,id_ptr);
+    }
+    return 0;
 
 }
 
-int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
+
+int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
     
+    size_t value = n->value;
+    //hashtable* b = entry->ht;
+
     b = find_bucket_write(b,value);
     size_t h = value & (b->header.n_buckets)-1;
-    // hash(value,b->header.n_buckets);
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
 
+    node* cur = (&b->bucket)[h].first;
+    node* prev = cur;
 
-    //expand && insert condition
-    if((&b->bucket)[h].size==(&b->bucket)[h].n) {
-        (&b->bucket)[h].array = expand_insert(b,value,h,id_ptr);
+    int64_t count = 1;
 
+    //get to end of bucket array
+    while(cur != (void*)b) {
+        //can't insert, value already exists
+        if(cur->value == value) {
+            UNLOCK(bucket_lock);  
+            return 0;
+        }
+        prev = cur;
+        cur = cur->next;
+        count ++;
+    }
+
+
+    if(count==1) {
+        n->next = (&b->bucket)[h].first;
+        (&b->bucket)[h].first = n;
     }
     else {
-        
-        int i = 0;
-        //stops when value > or =
-        while((&b->bucket)[h].array[i]<value && i<(&b->bucket)[h].n) {
-            i++;
-        }
-
-        //if inside current valid space (check this first, random trash could per chance be equal to the value we're trying to insert just out of bound)
-        if(i<(&b->bucket)[h].n) {
-            //shimmy the values to the right and insert
-            if((&b->bucket)[h].array[i] != value) {
-                size_t cur_value;
-                size_t prev_value = value;
-                while(i<(&b->bucket)[h].n) {
-                    cur_value = (&b->bucket)[h].array[i];
-                    (&b->bucket)[h].array[i] = prev_value;
-                    prev_value = cur_value;
-                    i++;
-                }
-                (&b->bucket)[h].array[i] = prev_value;
-                (&b->bucket)[h].n++;
-
-            }
-            //value already inserted
-            else {
-                int size = (&b->bucket)[h].n;
-                UNLOCK(bucket_lock);  
-                return size;
-            }
-        }
-        else {
-            (&b->bucket)[h].array[i] = value;
-            (&b->bucket)[h].n++;
-        }
+        n->next = prev->next;
+        prev->next = n;
     }
 
-    int size = (&b->bucket)[h].n;
     //unlock search lock
     UNLOCK(bucket_lock);  
 
@@ -251,93 +291,10 @@ int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
 
     //only update after certain nr of operations (UPDATE) have been done 
     if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
-
-        //if the header is the same as the header stored in the thread update, if not
-        //an expansion already occured for the previous table and we're in a new table, ops are invalid
-        if((b->header.n_buckets == entry->header.insert_count[id_ptr].header) && !(b->header.mode)) {
-            
-            //recheck for expansion
-            entry->header.insert_count[id_ptr].ht_header_lock_count++;
-            WRITE_LOCK(&b->header.lock);
-            if (!(b->header.mode)) {
-                b->header.n_ele+= entry->header.insert_count[id_ptr].count;
-            }
-            else {
-                //expansion already occuring this way it won't check for expansion when leaving
-                size = 0;
-            }
-            UNLOCK(&b->header.lock);
-        }
-        else {
-            //if the header is not the same, update the header
-            entry->header.insert_count[id_ptr].header = b->header.n_buckets;
-        }
-
-        //in any case, reset to 0 (either it dumped the count, or the count is irrelevant due to ht expansion)
-        entry->header.insert_count[id_ptr].count = 0;
-        entry->header.insert_count[id_ptr].ops = 0;
+        count = header_update(entry,b,count,id_ptr);
     }
 
-    return size;
-}
-
-int64_t delete(access* entry, size_t value, int64_t id_ptr) {
-    hashtable* b = entry->ht;
-    b = find_bucket_write(b,value);
-
-    size_t h = value & (b->header.n_buckets)-1;
-    //hash(value,b->header.n_buckets);
-    LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
-
-    int i = 0;
-    while(value>(&b->bucket)[h].array[i] && i < (&b->bucket)[h].n) {
-        i++;
-    }
-
-    if( (&b->bucket)[h].array[i]==value && i< (&b->bucket)[h].n) {
-        while(i < ((&b->bucket)[h].n-1)) {
-            (&b->bucket)[h].array[i] = (&b->bucket)[h].array[i+1];
-            i++;
-        }
-        (&b->bucket)[h].n--;
-        UNLOCK(bucket_lock);
-
-        entry->header.insert_count[id_ptr].count--;
-        entry->header.insert_count[id_ptr].ops++;
-
-        //only update after certain nr of operations (UPDATE) have been done 
-        if(entry->header.insert_count[id_ptr].ops >= UPDATE) {
-
-            //if the header is the same as the header stored in the thread update, if not
-            //an expansion already occured for the previous table and we're in a new table, ops are invalid
-            if((b->header.n_buckets == entry->header.insert_count[id_ptr].header) && !(b->header.mode)) {
-                entry->header.insert_count[id_ptr].ht_header_lock_count++;
-                
-                //recheck for expansion
-                WRITE_LOCK(&b->header.lock);
-                if (!(b->header.mode)) {
-                    b->header.n_ele+= entry->header.insert_count[id_ptr].count;
-                }          
-                UNLOCK(&b->header.lock);
-            }
-            else {
-                //if the header is not the same, update the header
-                entry->header.insert_count[id_ptr].header = b->header.n_buckets;
-            }
-
-            //in any case, reset to 0 (either it dumped the count, or the count is irrelevant due to ht expansion)
-            entry->header.insert_count[id_ptr].count = 0;
-            entry->header.insert_count[id_ptr].ops = 0;
-        }
-
-        return 1;
-    }
-
-
-    //couldn't find value to delete    
-    UNLOCK(bucket_lock);
-    return 0;
-
+    return count;
 }
 
 // função que faz handle do processo de insert
@@ -345,34 +302,50 @@ int64_t delete(access* entry, size_t value, int64_t id_ptr) {
 // os prints comentados nesta função são usados para fazer debuging. 
 int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
-    int64_t chain_size = insert(b,entry,value,id_ptr);
-    //quando uma thread insere uma key, se quando entrou o n_elem != -1 e quando sai é ==-1,
-    //isto quer dizer que a table expandiu após a inserção, no mommento de expansão
-    //à uma recontagem dos elementos à medida que são ajustados na nova tabela
-    //logo, a thread não pode aumentar o nr de elementos visto que já foi contado pela expansão
-    // se quando entrou o n_ele == -1, o mecanismo que lida com isso está na função de inserção 
-    // se quando voltou o valor é !=-1, deve incrementar e verificar se precisa de ser expandida. 
+
+    int64_t exp_thread = b->header.mode;
+
+    if(exp_thread > 0) {
+        if(is_bucket_array((&b->bucket)[0].first)) {
+            hashtable* newb = (void *)((uint64_t)(&b->bucket)[0].first & ~(1<<0));
+            coop_expand(b,newb,(&b->bucket)[0].first,entry->header.insert_count[exp_thread].expansion_at_bucket,entry,id_ptr);
+            
+            //the first one to finish helping marks as expanded
+            if( b->header.mode>0) {
+                WRITE_LOCK(&b->header.lock);
+                b->header.mode = -1;
+                UNLOCK(&b->header.lock);
+            }
+
+            //dont check expansion imediately after helping expand
+            node* n = inst_node(value,b);
+            insert(newb,entry,n,id_ptr);
+            return 1;
+        }
+    }
+
+    node* n = inst_node(value,b);
+    int64_t chain_size = insert(b,entry,n,id_ptr);
 
 
-    if((chain_size > TRESH ) && !(b->header.mode) && (b->header.n_ele > b->header.n_buckets)) {
-        entry->header.insert_count[id_ptr].ht_header_lock_count++;
+    //pre-check to not acquire lock unecessarilly
+    if((chain_size > TRESH ) && !(b->header.mode) && (b->header.n_ele > b->header.n_buckets)){
 
         WRITE_LOCK(&b->header.lock);
-
-        if (!(b->header.mode) && (b->header.n_ele > b->header.n_buckets)) { 
-                //signal expansion has started  
-                b->header.mode = 1;
+        if(!(b->header.mode) && (b->header.n_ele > b->header.n_buckets)) { 
+                //signal expansion has started
+                b->header.mode = id_ptr;
                 UNLOCK(&b->header.lock);
-                hashtable* oldb = b;
-                b = HashExpansion(b,entry,id_ptr);
-                
                 entry->header.insert_count[id_ptr].ht_header_lock_count++;
 
-                WRITE_LOCK(&oldb->header.lock);
+                hashtable* oldb = b;
+                b = HashExpansion(b,entry,id_ptr);
+                                
                 //signal expansion is finished
-                oldb->header.mode = 2;
+                WRITE_LOCK(&oldb->header.lock);
+                oldb->header.mode = -1;
                 UNLOCK(&oldb->header.lock);
-
+                
                 WRITE_LOCK(&entry->lock);
                 if (entry->ht->header.n_buckets < b->header.n_buckets) {
                     entry->ht = b;
@@ -385,3 +358,9 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
 
     return 1;
 }
+
+
+
+
+
+//---------------------------------------------------------------------------------------------------------------
