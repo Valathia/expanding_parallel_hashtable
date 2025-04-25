@@ -1,67 +1,7 @@
-#include "config.h"
+#include "common_functions.h"
 
-//NODE functions--------------------------------------------------------------------------------------------------------------------
-
-//instancia um node*
-node *inst_node(size_t k, hashtable* b){    
-    node *n = (node *) malloc(sizeof(node));
-    n->value = k;
-    n->next=(void*)b;
-    return n;
-};
-
-
-//função que verifica se o bucket está a apontar para uma hastable nova 
-size_t is_bucket_array(node* first) {
-    return (uint64_t)first&1;
-}
-
-
-//conta quantos nodes tem num "bucket"
-int64_t bucket_size(node *first, hashtable* b) {
-    if(first==(void*)b || is_bucket_array(first)) {
-        return 0;
-    }
-
-    int64_t i = 0;
-    node* p = NULL;
-    for(p=first; p!=(void*)b && !is_bucket_array(p) ;p=p->next) {
-        i++;
-    }
-    return i;
-}
-
-//Hashtable functions----------------------------------------------------------------------------------------------------------
-//hash simples 
-// n -> nr base 2
-// x % n == x & n-1
-size_t hash(size_t key, int64_t size) {
-
-    return  key & (size-1);
-}
-
-// tentei, artificialmente, fazer com que o h->bucket aponte para ele prórpio
-// depois por as posições de memória correspondetes a NULL, o problema:
-// nunca posso usar bucket[i] porque o compilador vai tratar sempre como sendo um node*
-// com nodes dentro, o que faz com que por exemplo, no for, o i quando incrementa 1 à memória,
-// se estiver como tenho escrito, incrementa 8 que é o size de um node* mas se tentar fazer h->bucket[i]
-// vai incrementar 16 que é o size de um node. 
-// Ou seja, tecnicamente, tenho (node* -> NULL)*n_buckets em memória continua com a restante estrutura. 
-// mas não posso usar a sintaxe normal. 
-hashtable* create_table(int64_t s) {
-    hashtable* h = (hashtable*)malloc(sizeof(hash_header) + sizeof(BUCKET)*s);
-    h->header.n_buckets = s;
-    LOCK_INIT(&h->header.lock, NULL);
-    h->header.n_ele = 0;
-    h->header.mode = 0;
-    for(int64_t i = 0; i<s; i++) {
-        (&h->bucket)[i].first = (void*)h;
-        LOCK_INIT(&(&h->bucket)[i].lock_b, NULL);
-    }
-    return h;
-}
-
- //insert sort para inserir os elementos por ordem antes de imprimir
+//Prints
+//insert sort para inserir os elementos por ordem antes de imprimir
 size_t* insert_sort(size_t vec[], size_t val,int64_t size) {
     size_t aux;
     size_t auxj;
@@ -138,71 +78,141 @@ void imprimir_hash(hashtable* ht, FILE* f) {
 }
 
 
-//data structure to keep hashtable head pointer to use the benchmark
-access* create_acess(int64_t s, int64_t n_threads) {
-    access* entry = (access*) malloc(sizeof(access));
-    entry->ht = create_table(s);
-    entry->header.thread_id = 1;
-    //entry->header.insert_count = (counter*)malloc(sizeof(counter)*MAXTHREADS);
-    LOCK_INIT( &entry->header.lock, NULL);
-    LOCK_INIT( &entry->lock, NULL);
-    for(int64_t i=0; i<n_threads; i++) {
-        //printf("header counter %ld : %p = 0 \n",i, &entry->header.insert_count[i]);
-        entry->header.insert_count[i].count = 0;
-        entry->header.insert_count[i].ops = 0;
-        entry->header.insert_count[i].header = s;
-        entry->header.insert_count[i].ht_header_lock_count = 0;
+
+//NODE functions--------------------------------------------------------------------------------------------------------------------
+
+//instancia um node*
+node *inst_node(size_t k, hashtable* b){    
+    node *n = (node *) malloc(sizeof(node));
+    n->value = k;
+    n->next=(void*)b;
+    return n;
+};
+
+
+//função que verifica se o bucket está a apontar para uma hastable nova 
+// size_t is_bucket_array(node* first) {
+//     return (uint64_t)first&1;
+// }
+
+
+//conta quantos nodes tem num "bucket"
+int64_t bucket_size(node *first, hashtable* b) {
+    if(first==(void*)b || is_bucket_array(first)) {
+        return 0;
     }
 
-    return entry;
+    int64_t i = 0;
+    node* p = NULL;
+    for(p=first; p!=(void*)b && !is_bucket_array(p) ;p=p->next) {
+        i++;
+    }
+    return i;
 }
 
-int64_t get_thread_id(access* entry_point) {
-    WRITE_LOCK(&entry_point->header.lock);
-    
-    //printf("lock \n");
-	int64_t thread_id = entry_point->header.thread_id;
-    entry_point->header.thread_id++;
-    //printf("Thread ID: %d \n",thread_id);
-    
-    UNLOCK(&entry_point->header.lock);
+//Hashtable functions----------------------------------------------------------------------------------------------------------
 
-    return thread_id;
+// tentei, artificialmente, fazer com que o h->bucket aponte para ele prórpio
+// depois por as posições de memória correspondetes a NULL, o problema:
+// nunca posso usar bucket[i] porque o compilador vai tratar sempre como sendo um node*
+// com nodes dentro, o que faz com que por exemplo, no for, o i quando incrementa 1 à memória,
+// se estiver como tenho escrito, incrementa 8 que é o size de um node* mas se tentar fazer h->bucket[i]
+// vai incrementar 16 que é o size de um node. 
+// Ou seja, tecnicamente, tenho (node* -> NULL)*n_buckets em memória continua com a restante estrutura. 
+// mas não posso usar a sintaxe normal. 
+hashtable* create_table(int64_t s) {
+    hashtable* h = (hashtable*)malloc(sizeof(hash_header) + sizeof(BUCKET)*s);
+    h->header.n_buckets = s;
+    LOCK_INIT(&h->header.lock, NULL);
+    h->header.n_ele = 0;
+    h->header.mode = 0;
+    for(int64_t i = 0; i<s; i++) {
+        (&h->bucket)[i].first = (void*)h;
+        LOCK_INIT(&(&h->bucket)[i].lock_b, NULL);
+    }
+    return h;
 }
 
-//update header_counter with trylock
-int64_t header_update(access* entry, hashtable* b, int64_t count, int64_t id_ptr) {
+//Funções comuns às HT com Nodes ----------------------------------------------------------------------------------------------------------
 
-    //if the header is the same as the header stored in the thread update, if not
-    //an expansion already occured for the previous table and we're in a new table, ops are invalid
-    if((b->header.n_buckets == entry->header.insert_count[id_ptr].header) && !(b->header.mode)) {
+void adjustNodes(node* n, hashtable* b,hashtable* old, access* entry, int64_t id_ptr) {
 
-        //only lock if header is the same and has not begin expanding
-        if (!TRY_LOCK(&b->header.lock)) {
-            entry->header.insert_count[id_ptr].ht_header_lock_count++;
-
-            //recheck for expansion after gaining lock
-            if (!(b->header.mode)) {
-                b->header.n_ele+= entry->header.insert_count[id_ptr].count;
-                //printf("updated! %ld \n",b->header.n_ele);
-            }
-            else {
-                //expansion already occuring this way it won't check for expansion when leaving
-                count = 0;
-            }
-
-            entry->header.insert_count[id_ptr].count = 0;
-            entry->header.insert_count[id_ptr].ops = 0;
-
-            UNLOCK(&b->header.lock);
+    if (n != (void*)old && !is_bucket_array(n)) { 
+        node* chain = n;
+        if ( chain->next != (void*)old && chain->next != (void*)b && !is_bucket_array(chain->next)) {
+            adjustNodes(chain->next,b,old,entry,id_ptr);
         }
+        
+        insert(b,entry,chain,id_ptr);
+        return;
     }
-    else {
-        //if the header is not the same, update the header (don't need a lock to read this, this attribute never changes)
-        entry->header.insert_count[id_ptr].header = b->header.n_buckets;
-        entry->header.insert_count[id_ptr].count = 0;
-        entry->header.insert_count[id_ptr].ops = 0;
+    return;
+}
+
+// função de hash expansion
+// o 1º modelo faz algumas verificações desnecessárias para expansões concorrentes 
+// mas não altera o comportamento para os modelos sem co-op
+hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
+    hashtable* oldB = b;
+    int64_t oldK = b->header.n_buckets;
+    int64_t newK = 2*oldK;
+    hashtable* newB = create_table(newK);
+    int64_t i=0;
+    node* node_mask = Mask(newB);
+
+
+    //update thread counter for new header BEFORE starting
+    entry->header.insert_count[id_ptr].header = newK;
+    entry->header.insert_count[id_ptr].count = 0;
+    entry->header.insert_count[id_ptr].ops = 0;
+    entry->header.insert_count[id_ptr].expansion_at_bucket = 0;
+    
+    while (i < oldK) {
+
+        if(!is_bucket_array((&oldB->bucket)[i].first)) {
+
+            WRITE_LOCK(&((&oldB->bucket)[i].lock_b));
+            
+            if ((&oldB->bucket)[i].first != (void*)b) { //&& (&oldB->bucket)[i].first != node_mask
+                
+                adjustNodes((&oldB->bucket)[i].first,newB,oldB,entry,id_ptr);
+                
+            }  
+
+            //resheck bucket for double expansion, just to be safe
+            if(!is_bucket_array((&oldB->bucket)[i].first)) {
+                (&oldB->bucket)[i].first = node_mask;
+            }
+
+            UNLOCK(&((&oldB->bucket)[i].lock_b));
+        }
+        entry->header.insert_count[id_ptr].expansion_at_bucket++;
+        i++;
     }
 
-    return count;
+    return newB;
+}
+
+
+hashtable* find_bucket(hashtable* b,size_t value) {
+    size_t h = Hash(value,b->header.n_buckets);
+
+    LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
+    WRITE_LOCK(bucket_lock);
+
+    //if bucket is pointing towards a new table, keep going until we find the bucket of the current hashtable
+    while(is_bucket_array((&b->bucket)[h].first)) {
+
+        b = Unmask((&b->bucket)[h].first);
+
+        h = Hash(value,b->header.n_buckets);
+
+        //old = bucket_lock;
+        UNLOCK(bucket_lock);
+        bucket_lock = &(&b->bucket)[h].lock_b;
+        WRITE_LOCK(bucket_lock);
+        //UNLOCK(old);  
+    }
+
+    return b;
 }

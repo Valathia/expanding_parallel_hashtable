@@ -1,10 +1,5 @@
 #include "node_functions.h"
 
-//int64_t* elements;
-//int64_t* instructions;
-//int64_t* results;
-//int64_t* start;
-//pthread_t* th;
 // Locks at buckets - no lock at header expansion
 // - lock header
 // - change n_elems to -1 
@@ -17,88 +12,18 @@
 // moves nodes 1 by 1 to new table 
 // working for insert, search, delete at the same time
 
-//---------------------------------------------------------------------------------------------------------------
-
-//Verifica condição de expansão actualmente:
-//#nodes > #buckets && #nodesnumbucket > threshhold
-
-//---------------------------------------------------------------------------------------------------------------
-
-
-//função do paper que ajusta os nodes -> passa o marking node para o fim de cada bucket. 
-void adjustNodes(node* n, hashtable* b,hashtable* old, access* entry, int64_t id_ptr) {
-
-    if (n != (void*)old && !is_bucket_array(n)) { 
-        node* chain = n;
-        if ( chain->next != (void*)old && chain->next != (void*)b && !is_bucket_array(chain->next)) {
-            adjustNodes(chain->next,b,old,entry,id_ptr);
-        }
-        
-        insert(b,entry,chain,id_ptr);
-        return;
-    }
-    return;
-}
-
-// função de hash expansion
-hashtable* HashExpansion(hashtable* b, access* entry, int64_t id_ptr) {
-    hashtable* oldB = b;
-    int64_t oldK = b->header.n_buckets;
-    int64_t newK = 2*oldK;
-    hashtable* newB = create_table(newK);
-    int64_t i=0;
-    node* node_mask = (void*)(uint64_t*)((uint64_t)newB | 1);
-    
-    while (i < oldK) {
-
-        //substituir o cas por um if
-        WRITE_LOCK(&((&oldB->bucket)[i].lock_b));
-        
-        if ((&oldB->bucket)[i].first != (void*)b) { //&& (&oldB->bucket)[i].first != node_mask
-            
-            adjustNodes((&oldB->bucket)[i].first,newB,oldB,entry,id_ptr);
-            
-        }  
-
-        (&oldB->bucket)[i].first = node_mask;
-        UNLOCK(&((&oldB->bucket)[i].lock_b));
-
-        i++;
-    }
-
-    return newB;
-}
-
-hashtable* find_bucket(hashtable* b,size_t value) {
-    size_t h = value & (b->header.n_buckets)-1;
-    //hash(value,b->header.n_buckets);
-    LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
-    WRITE_LOCK(bucket_lock);
-
-    //if bucket is pointing towards a new table, keep going until we find the bucket of the current hashtable
-    while(is_bucket_array((&b->bucket)[h].first)) {
-
-        b = (void *)((uint64_t)(&b->bucket)[h].first & ~(1<<0));
-
-        h = value & (b->header.n_buckets)-1;
-        //hash(value,b->header.n_buckets);
-
-        //old = bucket_lock;
-        UNLOCK(bucket_lock);
-        bucket_lock = &(&b->bucket)[h].lock_b;
-        WRITE_LOCK(bucket_lock);
-        //UNLOCK(old);  
-    }
-
-    return b;
-}
+/*---------------------------------------------------------------------------------------------------------------
+    Expandable Hashtable with Nodes at Bucket Level
+    Closed Addressing
+    Base Case 
+    Single-Thread Expansion
+//---------------------------------------------------------------------------------------------------------------*/
 
 int64_t delete(access* entry,size_t value, int64_t id_ptr) {
-    hashtable* b = entry->ht;
+    hashtable* b = find_bucket( entry->ht,value);
 
-    b = find_bucket(b,value);
-    size_t h = value & (b->header.n_buckets)-1;
-    //hash(value,b->header.n_buckets);
+    size_t h = Hash(value,b->header.n_buckets);
+    
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
 
     node* cur = (&b->bucket)[h].first;
@@ -140,8 +65,8 @@ int64_t search(access* entry,size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
     //get current hashtable where correct bucket is
     b = find_bucket(b,value);
-    size_t h = value & (b->header.n_buckets)-1;
-    //hash(value,b->header.n_buckets);
+    size_t h = Hash(value,b->header.n_buckets);
+    
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
     
     node* cur = (&b->bucket)[h].first;
@@ -164,12 +89,10 @@ int64_t search(access* entry,size_t value, int64_t id_ptr) {
 int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
     
     size_t value = n->value;
-    //hashtable* b = entry->ht;
-
 
     b = find_bucket(b,value);
-    size_t h = value & (b->header.n_buckets)-1;
-    // hash(value,b->header.n_buckets);
+    size_t h = Hash(value,b->header.n_buckets);
+
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
 
 
@@ -217,7 +140,6 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
 
 // função que faz handle do processo de insert
 // e que dá inicio À expansão quando necessário
-// os prints comentados nesta função são usados para fazer debuging. 
 int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
     node* n = inst_node(value,b);
@@ -225,6 +147,7 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
 
 
     if((chain_size > TRESH) && (b->header.n_ele > b->header.n_buckets)) { 
+        entry->header.insert_count[id_ptr].ht_header_lock_count++;
         WRITE_LOCK(&b->header.lock);
 
         if((b->header.n_ele > b->header.n_buckets)) {
@@ -236,6 +159,8 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
             hashtable* oldb = b;
             b = HashExpansion(b,entry,id_ptr);
             
+            entry->header.insert_count[id_ptr].ht_header_lock_count++;
+
             WRITE_LOCK(&oldb->header.lock);
             //signal expansion is finished
             oldb->header.n_ele = -2;

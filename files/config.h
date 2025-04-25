@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+//Isto está especifico aos pcs onde está a ser testado: 1º onde o jemalloc está no macbook com homebrew
+//                                                      2º onde o jemalloc está instalado na sibila2
 #ifdef __APPLE__
 	#include "../../../../opt/homebrew/Cellar/jemalloc/5.3.0/include/jemalloc/jemalloc.h"
 #else 
@@ -21,6 +23,12 @@
 
 #define MAXTHREADS 32
 
+#define Hash(v,n) (v&(n-(size_t)1))                                 // x % n == x & n-1 --- só funciona porque os nr de buckets é uma potência de base 2
+#define is_bucket_array(f) ((uint64_t)f&1)                          //função que verifica se o bucket está a apontar para uma hastable nova é 1 se estiver a apontar para uma HT nova
+#define Mask(ht) ((void*)(uint64_t*)((uint64_t)ht | (uint64_t)1))
+#define Unmask(pt) ((void *)((uint64_t)pt & ~(uint64_t)(1<<0))) 
+
+//isto está desactualizado e eventialmente pode ser removido para ser só o Mutex
 #ifdef MUTEX
     #define LOCKS pthread_mutex_t
     #define LOCK_INIT pthread_mutex_init
@@ -86,7 +94,8 @@ typedef struct access_header {
     counter insert_count[MAXTHREADS+1];
 }access_header;
 
-// struct to 
+// support struct to hold integration between the struct and bench
+// has thread bookeeping structures
 typedef struct access {
     access_header header;
     LOCKS lock;
@@ -108,3 +117,9 @@ void imprimir_hash(hashtable* ht, FILE* f);
     int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr);
     int64_t bucket_size(node *first, hashtable* b);
 #endif
+//---------------------------------------------------------------------------------------------------------------
+
+// condição de expansão actual:
+//  #nodes_total > #buckets && #nodes_num_bucket > threshhold
+
+//---------------------------------------------------------------------------------------------------------------
