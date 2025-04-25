@@ -84,6 +84,7 @@ typedef struct __attribute__ ((aligned(64))) counter {
     int64_t header; //n_buckets para identificar o header, não há 2 headers com o mesmo nr de buckets
     int64_t ht_header_lock_count;
     int64_t expansion_at_bucket;
+    int64_t all_ops;
 }counter;
 
 //spacing so hopefully the lock for the ht pointer is separated from the header

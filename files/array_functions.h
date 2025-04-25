@@ -155,7 +155,7 @@ hashtable* find_bucket(hashtable* b,size_t value) {
 int64_t search(access* entry, size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
     //get current hashtable where correct bucket is
-    b = find_buckets(b,value);
+    b = find_bucket(b,value);
     size_t h = Hash(value,b->header.n_buckets);
 
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;

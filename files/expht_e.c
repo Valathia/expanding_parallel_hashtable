@@ -4,7 +4,7 @@
     Closed Addressing
     Dellayed Header Updates    
     Single-Thread Expansion
-/---------------------------------------------------------------------------------------------------------------*/
+//---------------------------------------------------------------------------------------------------------------*/
 
 
 int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
@@ -15,18 +15,18 @@ int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
 
 
-    //expand && insert condition
-    if((&b->bucket)[h].size==(&b->bucket)[h].n) {
-        (&b->bucket)[h].array = expand_insert(b,value,h,id_ptr);
+    //if it's the first item, first allocate array
+    if((&b->bucket)[h].size==0){
+        (&b->bucket)[h].size = ARRAY_INIT_SIZE;
+        (&b->bucket)[h].array = (size_t*)malloc(sizeof(size_t)*ARRAY_INIT_SIZE);
+        (&b->bucket)[h].array[0] = value;
+        (&b->bucket)[h].n = 1;
     }
     else {
         
-        //if it's the first item, first allocate array
-        if((&b->bucket)[h].size==0){
-            (&b->bucket)[h].size = ARRAY_INIT_SIZE;
-            (&b->bucket)[h].array = (size_t*)malloc(sizeof(size_t)*ARRAY_INIT_SIZE);
-            (&b->bucket)[h].array[0] = value;
-            (&b->bucket)[h].n = 1;
+        //expand && insert condition
+        if((&b->bucket)[h].size==(&b->bucket)[h].n) {
+            (&b->bucket)[h].array = expand_insert(b,value,h,id_ptr);
         }
         else {
             int64_t i = 0;

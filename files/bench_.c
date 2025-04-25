@@ -4,11 +4,6 @@
 //#include <pthread.h>
 #include <time.h>
 
-// version flag = 3 -> d
-// version flag = 2 -> c
-// version flag = 1 -> b
-// version flag = 0 -> a
-
 #if DEBUG
 #include <assert.h>
 #endif
@@ -95,6 +90,7 @@ void *bench_worker(void *entry_point)
 				search(entry,value,thread_id);
 			#endif
 		}
+		entry->header.insert_count[thread_id].all_ops++;
 	}
 	//lfht_end_thread(head, thread_id);
 	return NULL;
@@ -242,7 +238,6 @@ void stats() {
 	printf("Average Bucket Size: %lf\n", (float)exp_size/(float)table_size);
 	printf("Header Access Total: %ld\n",header_access);
 	printf("Header Access Average: %lf\n",(float)header_access/(float)n_threads);
-
 }
 
 
@@ -317,6 +312,15 @@ int main(int argc, char **argv)
 	
 	time = end_process.tv_sec - start_process.tv_sec + ((end_process.tv_nsec - start_process.tv_nsec)/1000000000.0);
 	printf("Process time: %lf\n", time);
+	int64_t total_ops = 0;
+	
+	for(int64_t i=1; i<n_threads+1; i++) {
+		if(entry->header.insert_count[i].header == entry->ht->header.n_buckets) {
+			total_ops += entry->header.insert_count[i].all_ops;
+		}
+	}
+	printf("Total Operations: %ld\n",total_ops);
+
 
 	if(inserts == 100) {
 		stats();

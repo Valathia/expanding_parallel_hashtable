@@ -10,13 +10,14 @@ access* create_acess(int64_t s, int64_t n_threads) {
     LOCK_INIT( &entry->header.lock, NULL);
     LOCK_INIT( &entry->lock,NULL);
 
-    for(int64_t i=0; i<n_threads; i++) {
+    for(int64_t i=1; i<n_threads+1; i++) {
         //printf("header counter %ld : %p = 0 \n",i, &entry->header.insert_count[i]);
         entry->header.insert_count[i].count = 0;
         entry->header.insert_count[i].ops = 0;
         entry->header.insert_count[i].header = s;
         entry->header.insert_count[i].ht_header_lock_count = 0;
         entry->header.insert_count[i].expansion_at_bucket = 0;
+        entry->header.insert_count[i].all_ops = 0;
     }
 
     return entry;

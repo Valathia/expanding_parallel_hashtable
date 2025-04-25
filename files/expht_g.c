@@ -36,9 +36,12 @@ void coop_expand(hashtable* oldB, hashtable* newB, size_t* node_mask, int64_t i,
                 }  
 
                 //recheck bucket for double expansion
+                //recheck bucket for double expansion
                 if(!is_bucket_array((&oldB->bucket)[i].array)) {
                     //free old array memory && point to new ht
-                    free((&oldB->bucket)[i].array);
+                    if((&oldB->bucket)[i].size>0) {
+                        free((&oldB->bucket)[i].array);
+                    }
                     (&oldB->bucket)[i].array = node_mask;
                 }
 
@@ -58,17 +61,17 @@ int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
     // hash(value,b->header.n_buckets);
     LOCKS* bucket_lock = &(&b->bucket)[h].lock_b;
 
-    //expand && insert condition
-    if((&b->bucket)[h].size==(&b->bucket)[h].n) {
-        (&b->bucket)[h].array = expand_insert(b,value,h,id_ptr);
+    //if it's the first item, first allocate array
+    if((&b->bucket)[h].size==0){
+        (&b->bucket)[h].size = ARRAY_INIT_SIZE;
+        (&b->bucket)[h].array = (size_t*)malloc(sizeof(size_t)*ARRAY_INIT_SIZE);
+        (&b->bucket)[h].array[0] = value;
+        (&b->bucket)[h].n = 1;
     }
     else {
-        //if it's the first item, first allocate array
-        if((&b->bucket)[h].size==0){
-            (&b->bucket)[h].size = ARRAY_INIT_SIZE;
-            (&b->bucket)[h].array = (size_t*)malloc(sizeof(size_t)*ARRAY_INIT_SIZE);
-            (&b->bucket)[h].array[0] = value;
-            (&b->bucket)[h].n = 1;
+        //expand && insert condition
+        if((&b->bucket)[h].size==(&b->bucket)[h].n) {
+            (&b->bucket)[h].array = expand_insert(b,value,h,id_ptr);
         }
         else {
             int64_t i = 0;

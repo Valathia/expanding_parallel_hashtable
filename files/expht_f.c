@@ -22,7 +22,7 @@ int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
 
             //get new hashtable
             hashtable* newb = Unmask((&b->bucket)[0].array);
-
+    
             //clear counter if the thread doesn't know about the new header already
             if(entry->header.insert_count[id_ptr].header <  newb->header.n_buckets) {
                 entry->header.insert_count[id_ptr].count = 0;
@@ -30,33 +30,33 @@ int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
                 entry->header.insert_count[id_ptr].header = newb->header.n_buckets;
             }
 
-            
-            //move nodes
-            adjustNodes((&b->bucket)[h],newb,entry,id_ptr);
-            //insert new node into newtable
-            int64_t count = insert(newb,entry,value,id_ptr);
-            
-            //free old bucket & set node mask
-            free((&b->bucket)[h].array);
+            if((&b->bucket)[h].size>0) {
+                //move nodes
+                adjustNodes((&b->bucket)[h],newb,entry,id_ptr);
+                //free old bucket 
+                free((&b->bucket)[h].array);
+            }
             (&b->bucket)[h].array = (&b->bucket)[0].array;
-            b = newb;
-
             UNLOCK(bucket_lock);
+
+            //insert new node into newtable & set node mask
+            int64_t count = insert(newb,entry,value,id_ptr);
+            b = newb;
             return count;
         }
     }
 
-    //expand && insert condition
-    if((&b->bucket)[h].size==(&b->bucket)[h].n) {
-        (&b->bucket)[h].array = expand_insert(b,value,h,id_ptr);
+    //if it's the first item, first allocate array
+    if((&b->bucket)[h].size==0){
+        (&b->bucket)[h].size = ARRAY_INIT_SIZE;
+        (&b->bucket)[h].array = (size_t*)malloc(sizeof(size_t)*ARRAY_INIT_SIZE);
+        (&b->bucket)[h].array[0] = value;
+        (&b->bucket)[h].n = 1;
     }
     else {
-        //if it's the first item, first allocate array
-        if((&b->bucket)[h].size==0){
-            (&b->bucket)[h].size = ARRAY_INIT_SIZE;
-            (&b->bucket)[h].array = (size_t*)malloc(sizeof(size_t)*ARRAY_INIT_SIZE);
-            (&b->bucket)[h].array[0] = value;
-            (&b->bucket)[h].n = 1;
+        //expand && insert condition
+        if((&b->bucket)[h].size==(&b->bucket)[h].n) {
+            (&b->bucket)[h].array = expand_insert(b,value,h,id_ptr);
         }
         else {
             

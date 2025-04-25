@@ -108,7 +108,7 @@ do
         FILE="../tests/${LOCK_NAME}/${VERSION}/${N_TH}_${N_ELEM}_${LOCK_NAME}_${VERSION}_${JEMALLOC_NAME}.csv"
     fi
     
-    printf "inserts real time, inserts process time, hashtable size, elements recorded, elements total, elements actual, largest element size, smallest element size, load factor, largest bucket size, smallest bucket size, buckets at largest, buckets at smallest, average bucket size, header access total, header access average, deletes real time, deletes process time, hits real time, hits process time, misses real time, misses process time, mixed real time, mixed process time\n" > $FILE
+    printf "inserts real time, inserts process time, total ops inserts, hashtable size, elements recorded, elements total, elements actual, largest element size, smallest element size, load factor, largest bucket size, smallest bucket size, buckets at largest, buckets at smallest, average bucket size, header access total, header access average, deletes real time, deletes process time, total ops deletes, hits real time, hits process time, total ops hits, misses real time, misses process time, total ops misses, mixed real time, mixed process time, total ops mixed\n" > $FILE
 
     B=0;
 
