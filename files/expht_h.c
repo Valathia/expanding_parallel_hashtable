@@ -101,7 +101,7 @@ int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
         entry->header.insert_count[id_ptr].count++;
         entry->header.insert_count[id_ptr].ops++;
     }
-    else {
+    else if(entry->header.insert_count[id_ptr].header < b->header.n_buckets) {
         entry->header.insert_count[id_ptr].count = 1;
         entry->header.insert_count[id_ptr].ops = 1;
         entry->header.insert_count[id_ptr].header = b->header.n_buckets;

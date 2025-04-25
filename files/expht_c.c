@@ -84,11 +84,12 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
         entry->header.insert_count[id_ptr].count++;
         entry->header.insert_count[id_ptr].ops++;
     }
-    else {
+    else if(entry->header.insert_count[id_ptr].header < b->header.n_buckets) {
         entry->header.insert_count[id_ptr].count = 1;
         entry->header.insert_count[id_ptr].ops = 1;
         entry->header.insert_count[id_ptr].header = b->header.n_buckets;
     }
+
 
     //only update after certain nr of operations (UPDATE) have been done 
     if(entry->header.insert_count[id_ptr].ops >= UPDATE) {

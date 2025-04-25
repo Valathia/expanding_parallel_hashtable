@@ -153,10 +153,11 @@ void stats() {
 	}
 
 	for(int64_t i=1; i<n_threads+1; i++) {
+		//printf("Thread %llu : Inserted %llu items - Last Known Hashtable: %d \n",i,entry->header.insert_count[i].count,entry->header.insert_count[i].header);	
 		if(entry->header.insert_count[i].header == entry->ht->header.n_buckets) {
 			total_elements += entry->header.insert_count[i].count;
-			header_access +=entry->header.insert_count[i].ht_header_lock_count;
 		}
+		header_access += entry->header.insert_count[i].ht_header_lock_count;
 	}
 	
 	#ifdef ARRAY
@@ -312,12 +313,11 @@ int main(int argc, char **argv)
 	
 	time = end_process.tv_sec - start_process.tv_sec + ((end_process.tv_nsec - start_process.tv_nsec)/1000000000.0);
 	printf("Process time: %lf\n", time);
+
 	int64_t total_ops = 0;
-	
+
 	for(int64_t i=1; i<n_threads+1; i++) {
-		if(entry->header.insert_count[i].header == entry->ht->header.n_buckets) {
-			total_ops += entry->header.insert_count[i].all_ops;
-		}
+		total_ops += entry->header.insert_count[i].all_ops;
 	}
 	printf("Total Operations: %ld\n",total_ops);
 

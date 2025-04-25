@@ -51,25 +51,26 @@ int64_t header_update(access* entry, hashtable* b, int64_t count, int64_t id_ptr
 
             //recheck for expansion after gaining lock
             if (!(b->header.mode)) {
-                b->header.n_ele+= entry->header.insert_count[id_ptr].count;
+                b->header.n_ele += entry->header.insert_count[id_ptr].count;
+                entry->header.insert_count[id_ptr].count = 0;
+                entry->header.insert_count[id_ptr].ops = 0;
                 //printf("updated! %ld \n",b->header.n_ele);
             }
             else {
                 //expansion already occuring this way it won't check for expansion when leaving
                 count = 0;
             }
-    
-            entry->header.insert_count[id_ptr].count = 0;
-            entry->header.insert_count[id_ptr].ops = 0;
-    
+        
             UNLOCK(&b->header.lock);
         }
     }
     else {
         //if the header is not the same, update the header (don't need a lock to read this, this attribute never changes)
-        entry->header.insert_count[id_ptr].header = b->header.n_buckets;
-        entry->header.insert_count[id_ptr].count = 0;
-        entry->header.insert_count[id_ptr].ops = 0;
+        if(b->header.n_buckets >= entry->header.insert_count[id_ptr].header) {
+            entry->header.insert_count[id_ptr].header = b->header.n_buckets;
+            entry->header.insert_count[id_ptr].count = 0;
+            entry->header.insert_count[id_ptr].ops = 0;
+        }
     }
 
     return count;
