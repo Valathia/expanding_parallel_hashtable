@@ -7,7 +7,7 @@
     Single-Thread Expansion
 /---------------------------------------------------------------------------------------------------------------*/
 
-int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
+int64_t insert(hashtable* b, support* entry, node* n, int64_t id_ptr) {
     
     size_t value = n->value;
 
@@ -67,7 +67,7 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
 
 // função que faz handle do processo de insert
 // e que dá inicio À expansão quando necessário
-int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
+int64_t main_hash(support* entry,size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
     node* n = inst_node(value,b);
     int64_t chain_size = insert(b,entry,n,id_ptr);

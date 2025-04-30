@@ -1,5 +1,5 @@
 #include "node_functions.h"
-int64_t delete(access* entry,size_t value, int64_t id_ptr) {
+int64_t delete(support* entry,size_t value, int64_t id_ptr) {
 
     hashtable* b = find_bucket(entry->ht,value);
 
@@ -51,7 +51,7 @@ int64_t delete(access* entry,size_t value, int64_t id_ptr) {
 }
 
 
-int64_t search(access* entry, size_t value, int64_t id_ptr) {
+int64_t search(support* entry, size_t value, int64_t id_ptr) {
     //get current hashtable where correct bucket is
     hashtable* b = find_bucket(entry->ht,value);
 

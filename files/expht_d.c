@@ -12,7 +12,7 @@
                             this ensures that no bucket will be left behind unchecked. 
 /---------------------------------------------------------------------------------------------------------------*/
 
-void coop_expand(hashtable* oldB, hashtable* newB, node* node_mask, int64_t i, access* entry, int64_t id_ptr) {
+void coop_expand(hashtable* oldB, hashtable* newB, node* node_mask, int64_t i, support* entry, int64_t id_ptr) {
     
     int64_t oldK = oldB->header.n_buckets;
 
@@ -45,7 +45,7 @@ void coop_expand(hashtable* oldB, hashtable* newB, node* node_mask, int64_t i, a
     return;
 }
 
-int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
+int64_t insert(hashtable* b, support* entry, node* n, int64_t id_ptr) {
     
     size_t value = n->value;
 
@@ -104,7 +104,7 @@ int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr) {
 
 // função que faz handle do processo de insert
 // e que dá inicio À expansão quando necessário
-int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
+int64_t main_hash(support* entry,size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
 
     int64_t exp_thread = b->header.mode;

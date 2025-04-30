@@ -1,9 +1,9 @@
 #include "config.h"
 
 //common functions for both array and node ht 
-//access creation and thread related functions
-access* create_acess(int64_t s, int64_t n_threads) {
-    access* entry = (access*) malloc(sizeof(access));
+//support creation and thread related functions
+support* create_acess(int64_t s, int64_t n_threads) {
+    support* entry = (support*) malloc(sizeof(support));
     entry->ht = create_table(s);
     entry->header.thread_id = (int64_t)1;
 
@@ -24,7 +24,7 @@ access* create_acess(int64_t s, int64_t n_threads) {
 }
 
 //pôr aqui um cas ?
-int64_t get_thread_id(access* entry_point) {
+int64_t get_thread_id(support* entry_point) {
     WRITE_LOCK(&entry_point->header.lock);
     
     //printf("lock \n");
@@ -39,7 +39,7 @@ int64_t get_thread_id(access* entry_point) {
 
 
 //update header_counter with trylock
-int64_t header_update(access* entry, hashtable* b, int64_t count, int64_t id_ptr) {
+int64_t header_update(support* entry, hashtable* b, int64_t count, int64_t id_ptr) {
 
     //if the header is the same as the header stored in the thread update, if not
     //an expansion already occured for the previous table and we're in a new table, ops are invalid

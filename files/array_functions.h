@@ -73,7 +73,7 @@ size_t* expand_insert(hashtable* b, size_t value, size_t h, int64_t id_ptr) {
     return new_bucket;
 }
 
-void adjustNodes(BUCKET bucket, hashtable* b, access* entry, int64_t id_ptr) {
+void adjustNodes(BUCKET bucket, hashtable* b, support* entry, int64_t id_ptr) {
 
 
     if ( bucket.n != 0 && !is_bucket_array(bucket.array)) { 
@@ -86,7 +86,7 @@ void adjustNodes(BUCKET bucket, hashtable* b, access* entry, int64_t id_ptr) {
 
 // função de hash expansion - nas versões com CO-OP precisa de uma verificação extra
 // como não faz diferença para a normal, fica essa versão para todas
-hashtable* HashExpansion(hashtable* b,  access* entry, int64_t id_ptr) {
+hashtable* HashExpansion(hashtable* b,  support* entry, int64_t id_ptr) {
     hashtable* oldB = b;
     int64_t oldK = b->header.n_buckets;
     int64_t newK = 2*oldK;
@@ -152,7 +152,7 @@ hashtable* find_bucket(hashtable* b,size_t value) {
     return b;
 }
 
-int64_t search(access* entry, size_t value, int64_t id_ptr) {
+int64_t search(support* entry, size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
     //get current hashtable where correct bucket is
     b = find_bucket(b,value);
@@ -181,7 +181,7 @@ int64_t search(access* entry, size_t value, int64_t id_ptr) {
 
 }
 
-int64_t delete(access* entry, size_t value, int64_t id_ptr) {
+int64_t delete(support* entry, size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
     b = find_bucket(b,value);
 

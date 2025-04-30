@@ -3,6 +3,8 @@
 //#include <stdlib.h>
 //#include <pthread.h>
 #include <time.h>
+#include <signal.h>
+#include <unistd.h>
 
 #if DEBUG
 #include <assert.h>
@@ -22,8 +24,14 @@ size_t	limit_sf,
 int test_size,
     n_threads;
 
-access* entry ;
+support* entry ;
 
+// void timeout_handler(int signum) {
+// 	printf("Timeout Exceeded \n");
+// 	//pthread_exit((void *)-1);
+// 	//printf("Timeout Exceeded %lu \n", entry->header.thread_id);
+//     //pthread_exit(NULL);
+// }
 
 void *prepare_worker(void *entry_point)
 {
@@ -95,6 +103,8 @@ void *bench_worker(void *entry_point)
 	//lfht_end_thread(head, thread_id);
 	return NULL;
 }
+
+
 #if DEBUG
 void *test_worker(void *entry_point)
 {
@@ -130,7 +140,17 @@ void *test_worker(void *entry_point)
 }
 #endif
 
+
+// void *execute_with_timeout(void *entry_point) {
+//     signal(SIGALRM, timeout_handler);
+//     alarm(1);
+//     bench_worker(entry_point);
+//     alarm(0);  // Cancel the alarm if the function completes before timeout
+// 	return NULL;
+// }
+
 //if all inserts
+
 void stats() {
 
 	hashtable* ht = entry->ht;
@@ -191,8 +211,10 @@ void stats() {
 			
 		}
 	#else 
+
 		for(int64_t i=0; i<table_size; i++) {
 			aux = bucket_size((&ht->bucket)[i].first,ht);
+			//printf("bucket: %lu aux: %lu \n",i,aux);
 			moda[aux] += 1;
 			if (aux > 0) {
 				if(aux > max_size) {
@@ -206,14 +228,16 @@ void stats() {
 				list_size+=aux;
 			}
 		}
+
 		max_exp = max_size;
-		min_exp = min_size;
+		min_exp = min_size;	
 	#endif
+	
 	int64_t max_mode = moda[0];
 	int64_t max_i = 0;
 	int64_t min_mode = moda[0];
 	int64_t min_i = 0;
-	for(int64_t i=0; i<64;i++) {
+	for(int64_t i=0; i<128;i++) {
 		if(moda[i] > max_mode) {
 			max_mode = moda[i];
 			max_i = i; 
@@ -231,11 +255,33 @@ void stats() {
 	printf("Elements Actual: %ld\n",list_size);
 	printf("Largest Element Size: %ld\n",max_size);
 	printf("Smallest Element Size: %ld\n",min_size);
+
+	if(min_size < INT32_MAX) {
+		printf("Smallest Element Size: %ld\n",min_size);
+	}
+	else {
+		printf("Smallest Element Size: 0\n",min_size);
+	}
+
 	printf("Load Factor: %lf\n",(float)list_size/(float)table_size);
 	printf("Largest Bucket Size: %ld\n",max_exp);
-	printf("Smallest Bucket Size: %ld\n",min_exp);
+
+	if(min_exp < INT32_MAX) {	
+		printf("Smallest Bucket Size: %ld\n",min_exp);
+	}
+	else {
+		printf("Smallest Bucket Size: 0\n");
+	}
+
 	printf("# Buckets at Largest Size: %ld\n",moda[max_size]);
-	printf("# Buckets at Smallest Size: %ld\n",moda[min_size] + moda[0]);	
+	
+	if(min_size < INT32_MAX) {
+		printf("# Buckets at Smallest Size: %ld\n",moda[min_size] + moda[0]);	
+	}
+	else {
+		printf("# Buckets at Smallest Size: %ld\n",moda[0]);	
+	}
+	
 	printf("Average Bucket Size: %lf\n", (float)exp_size/(float)table_size);
 	printf("Header Access Total: %ld\n",header_access);
 	printf("Header Access Average: %lf\n",(float)header_access/(float)n_threads);
@@ -301,10 +347,18 @@ int main(int argc, char **argv)
 		srand48_r(i, seed[i]);
 		pthread_create(&threads[i], NULL, bench_worker, seed[i]);
 	}
-	
-	for(int64_t i=0; i<n_threads; i++)
-		pthread_join(threads[i], NULL);
-	
+
+	#if TIMED 
+		printf("Main Thread waiting for Threads \n");
+		sleep(1);
+		for(int64_t i=0; i<n_threads; i++)
+			pthread_cancel(threads[i]);
+		printf("Threads done \n");
+	#else
+		for(int64_t i=0; i<n_threads; i++)
+			pthread_join(threads[i], NULL);
+	#endif 
+
 	clock_gettime(CLOCK_MONOTONIC_RAW, &end_monoraw);
 	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_process);
 	
@@ -321,10 +375,11 @@ int main(int argc, char **argv)
 	}
 	printf("Total Operations: %ld\n",total_ops);
 
-
+	#if !TIMED
 	if(inserts == 100) {
 		stats();
 	}
+	#endif
 	//imprimir_hash(entry->ht);
 
 #if DEBUG

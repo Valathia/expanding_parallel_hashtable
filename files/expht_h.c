@@ -5,12 +5,12 @@
     Closed Addressing
     Dellayed Header Updates    
     Lazy Expansion: Expanding thread signals expansion is starting, allocates the new table 
-                    and expands the first bucket. Bucket are expanded on a access basis. When a thread
-                    accesses a bucket to insert a value, it expands the bucket before inserting. 
+                    and expands the first bucket. Bucket are expanded on a support basis. When a thread
+                    supportes a bucket to insert a value, it expands the bucket before inserting. 
 /---------------------------------------------------------------------------------------------------------------*/
 
 
-int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
+int64_t insert(hashtable* b, support* entry, size_t value, int64_t id_ptr) {
     
     b = find_bucket(b,value);
     size_t h = Hash(value,b->header.n_buckets);
@@ -118,7 +118,7 @@ int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr) {
 // função que faz handle do processo de insert
 // e que dá inicio À expansão quando necessário
 // os prints comentados nesta função são usados para fazer debuging. 
-int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
+int64_t main_hash(support* entry,size_t value, int64_t id_ptr) {
     hashtable* b = entry->ht;
 
     //all buckets have definetly been updated even without a lock to read
@@ -136,12 +136,6 @@ int64_t main_hash(access* entry,size_t value, int64_t id_ptr) {
     }
 
     int64_t chain_size = insert(b,entry,value,id_ptr);
-    //quando uma thread insere uma key, se quando entrou o n_elem != -1 e quando sai é ==-1,
-    //isto quer dizer que a table expandiu após a inserção, no mommento de expansão
-    //à uma recontagem dos elementos à medida que são ajustados na nova tabela
-    //logo, a thread não pode aumentar o nr de elementos visto que já foi contado pela expansão
-    // se quando entrou o n_ele == -1, o mecanismo que lida com isso está na função de inserção 
-    // se quando voltou o valor é !=-1, deve incrementar e verificar se precisa de ser expandida. 
 
     if((chain_size > TRESH ) && !(b->header.mode) && (b->header.n_ele > b->header.n_buckets)) {
 

@@ -88,34 +88,34 @@ typedef struct __attribute__ ((aligned(64))) counter {
 }counter;
 
 //spacing so hopefully the lock for the ht pointer is separated from the header
-typedef struct access_header {
+typedef struct support_header {
     LOCKS lock;
     int64_t thread_id;
     char _align[16];
     counter insert_count[MAXTHREADS+1];
-}access_header;
+}support_header;
 
 // support struct to hold integration between the struct and bench
 // has thread bookeeping structures
-typedef struct access {
-    access_header header;
+typedef struct support {
+    support_header header;
     LOCKS lock;
     hashtable* ht;
-}access;
+}support;
 
 hashtable* create_table(int64_t s);
-access* create_acess(int64_t s, int64_t n_threads);
+support* create_acess(int64_t s, int64_t n_threads);
 
-int64_t main_hash(access* entry,size_t value, int64_t id_ptr);
-int64_t search(access* entry,size_t value, int64_t id_ptr);
-int64_t delete(access* entry,size_t value, int64_t id_ptr);
-int64_t get_thread_id(access* entry);
+int64_t main_hash(support* entry,size_t value, int64_t id_ptr);
+int64_t search(support* entry,size_t value, int64_t id_ptr);
+int64_t delete(support* entry,size_t value, int64_t id_ptr);
+int64_t get_thread_id(support* entry);
 void imprimir_hash(hashtable* ht, FILE* f);
 
 #ifdef ARRAY
-    int64_t insert(hashtable* b, access* entry, size_t value, int64_t id_ptr);
+    int64_t insert(hashtable* b, support* entry, size_t value, int64_t id_ptr);
 #else 
-    int64_t insert(hashtable* b, access* entry, node* n, int64_t id_ptr);
+    int64_t insert(hashtable* b, support* entry, node* n, int64_t id_ptr);
     int64_t bucket_size(node *first, hashtable* b);
 #endif
 //---------------------------------------------------------------------------------------------------------------

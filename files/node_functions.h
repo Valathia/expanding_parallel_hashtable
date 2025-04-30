@@ -135,7 +135,7 @@ hashtable* create_table(int64_t s) {
 
 //Funções comuns às HT com Nodes ----------------------------------------------------------------------------------------------------------
 
-void adjustNodes(node* n, hashtable* b,hashtable* old, access* entry, int64_t id_ptr) {
+void adjustNodes(node* n, hashtable* b,hashtable* old, support* entry, int64_t id_ptr) {
 
     if (n != (void*)old && !is_bucket_array(n)) { 
         node* chain = n;
@@ -152,7 +152,7 @@ void adjustNodes(node* n, hashtable* b,hashtable* old, access* entry, int64_t id
 // função de hash expansion
 // o 1º modelo faz algumas verificações desnecessárias para expansões concorrentes 
 // mas não altera o comportamento para os modelos sem co-op
-hashtable* HashExpansion(hashtable* b,  access* entry , int64_t id_ptr) {
+hashtable* HashExpansion(hashtable* b,  support* entry , int64_t id_ptr) {
     hashtable* oldB = b;
     int64_t oldK = b->header.n_buckets;
     int64_t newK = 2*oldK;

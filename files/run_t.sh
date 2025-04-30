@@ -14,6 +14,7 @@ JEMALLOC=0
 JEMALLOC_NAME="nojemalloc"
 
 TIMED_FLAG=""
+TIMED=""
 
 while getopts ":jldt" opt; do
     case $opt in 
@@ -35,6 +36,7 @@ while getopts ":jldt" opt; do
         t)
             printf "timed mode\n"
             TIMED_FLAG="-DTIMED=1"
+            TIMED="_timed"
         ;;
         ?)
             echo "Invalid option: -$OPTARG" >&2
@@ -110,10 +112,10 @@ do
         printf "Printing to debug folder \n"
         FILE="../tests/debug/${LOCK_NAME}/${VERSION}/${N_TH}_${N_ELEM}_${LOCK_NAME}_${VERSION}_${JEMALLOC_NAME}.csv"
     else 
-        FILE="../tests/${LOCK_NAME}/${VERSION}/${N_TH}_${N_ELEM}_${LOCK_NAME}_${VERSION}_${JEMALLOC_NAME}.csv"
+        FILE="../tests/${LOCK_NAME}/${VERSION}/${N_TH}_${N_ELEM}_${LOCK_NAME}_${VERSION}_${JEMALLOC_NAME}${TIMED}.csv"
     fi
     
-    printf "inserts real time, inserts process time, total ops inserts, hashtable size, elements recorded, elements total, elements actual, largest element size, smallest element size, load factor, largest bucket size, smallest bucket size, buckets at largest, buckets at smallest, average bucket size, header access total, header access average, deletes real time, deletes process time, total ops deletes, hits real time, hits process time, total ops hits, misses real time, misses process time, total ops misses, mixed real time, mixed process time, total ops mixed\n" > $FILE
+    printf "inserts real time, inserts process time, total ops inserts, mixed real time, mixed process time, total ops mixed\n" > $FILE
 
     B=0;
 
@@ -131,25 +133,13 @@ do
         #overwrite file then add the others to file
         printf "testing all inserts..."
         LD_PRELOAD=`jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision` ./bench $N_TH $N_ELEM 100 0 0 0  > ../tests/times.txt
-        printf "testing all deletes..."
-        LD_PRELOAD=`jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision` ./bench $N_TH $N_ELEM 0 100 0 0  >> ../tests/times.txt
-        printf "testing all hits..."
-        LD_PRELOAD=`jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision` ./bench $N_TH $N_ELEM 0 0 100 0  >> ../tests/times.txt
-        printf "testing all misses..."
-        LD_PRELOAD=`jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision` ./bench $N_TH $N_ELEM 0 0 0 100  >> ../tests/times.txt
         printf "testing mixed...\n"
-        LD_PRELOAD=`jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision` ./bench $N_TH $N_ELEM 50 20 20 10  >> ../tests/times.txt
+        LD_PRELOAD=`jemalloc-config --libdir`/libjemalloc.so.`jemalloc-config --revision` ./bench $N_TH 1000000 50 20 20 10  >> ../tests/times.txt
 
     else
         #overwrite file then add the others to file
         printf "testing all inserts..."
         ./bench $N_TH $N_ELEM 100 0 0 0  > ../tests/times.txt
-        printf "testing all deletes..."
-        ./bench $N_TH $N_ELEM 0 100 0 0  >> ../tests/times.txt
-        printf "testing all hits..."
-        ./bench $N_TH $N_ELEM 0 0 100 0  >> ../tests/times.txt
-        printf "testing all misses..."
-        ./bench $N_TH $N_ELEM 0 0 0 100  >> ../tests/times.txt
         printf "testing mixed...\n"
         ./bench $N_TH $N_ELEM 50 20 20 10  >> ../tests/times.txt
     fi

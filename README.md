@@ -27,7 +27,7 @@ this equates to: 10 all inserts, 10 all deletes, 10 all hits , 10 all misses and
 
 - c: Expandable Hashtable w/ Nodes & Delayed Updates & Lazy-Coop Expansion
 
-- d: Expandable Hashtable w/ Ordered Arrays & Delayed Updates & Full-Coop Expansion (not stable)
+- d: Expandable Hashtable w/ Nodes & Delayed Updates & Full-Coop Expansion (not stable)
 
 - e: Expandable Hashtable w/ Unordered Arrays & Delayed Updates
 
