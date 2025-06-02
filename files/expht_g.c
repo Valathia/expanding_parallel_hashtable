@@ -168,6 +168,13 @@ int64_t main_hash(support* entry,size_t value, int64_t id_ptr) {
                 }
                 
                 WRITE_LOCK(&entry->lock);
+                //don't need a lock here, the other 2 possible results is not expanding or expanding. if the table finishes expanding in the meantime
+                //the expanding thread can update it itself once it's done
+                //Need to update this one step at a time due to SEARCH function
+                while(b->header.mode == -1) {
+                    b = Unmask((&b->bucket)[0].array);
+                }
+                
                 if (entry->ht->header.n_buckets < b->header.n_buckets) {
                     entry->ht = b;
                 }

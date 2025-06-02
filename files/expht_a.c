@@ -106,6 +106,7 @@ int64_t insert(hashtable* b, support* entry, node* n, int64_t id_ptr) {
         //can't insert, value already exists
         if(cur->value == value) {
             UNLOCK(bucket_lock);  
+            free(n);
             return 0;
         }
         prev = cur;
@@ -167,6 +168,13 @@ int64_t main_hash(support* entry,size_t value, int64_t id_ptr) {
             UNLOCK(&oldb->header.lock);
 
             WRITE_LOCK(&entry->lock);
+            //don't need a lock here, the other 2 possible results is not expanding or expanding. if the table finishes expanding in the meantime
+            //the expanding thread can update it itself once it's done
+            //Need to update this one step at a time due to SEARCH function
+            while(b->header.n_ele == -2) {
+                b = Unmask((&b->bucket)[0].first);
+            }
+            
             if (entry->ht->header.n_buckets < b->header.n_buckets) {
                 entry->ht = b;
             }

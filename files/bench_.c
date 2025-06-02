@@ -27,10 +27,10 @@ int test_size,
 support* entry ;
 
 // void timeout_handler(int signum) {
-// 	printf("Timeout Exceeded \n");
+// 	//printf("Timeout Exceeded \n");
 // 	//pthread_exit((void *)-1);
 // 	//printf("Timeout Exceeded %lu \n", entry->header.thread_id);
-//     //pthread_exit(NULL);
+//     pthread_exit(NULL);
 // }
 
 void *prepare_worker(void *entry_point)

@@ -138,12 +138,12 @@ hashtable* create_table(int64_t s) {
 void adjustNodes(node* n, hashtable* b,hashtable* old, support* entry, int64_t id_ptr) {
 
     if (n != (void*)old && !is_bucket_array(n)) { 
-        node* chain = n;
-        if ( chain->next != (void*)old && chain->next != (void*)b && !is_bucket_array(chain->next)) {
-            adjustNodes(chain->next,b,old,entry,id_ptr);
+        node* chain = n->next;
+        if ( chain != (void*)old && chain != (void*)b && !is_bucket_array(chain)) {
+            adjustNodes(chain,b,old,entry,id_ptr);
         }
         
-        insert(b,entry,chain,id_ptr);
+        insert(b,entry,n,id_ptr);
         return;
     }
     return;

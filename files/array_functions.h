@@ -59,15 +59,21 @@ size_t* expand_insert(hashtable* b, size_t value, size_t h, int64_t id_ptr) {
     size_t* new_bucket = (size_t*)malloc(sizeof(size_t)*newsize);
 
     int64_t i=0;
+    int64_t found = 0;
     while(i<(&b->bucket)[h].n) {
         new_bucket[i] = old_bucket[i];
+        if(old_bucket[i] == value) {
+            found = 1;
+        }
         i++;
     }
+    (&b->bucket)[h].n = i;
+    
+    if(!found) {
+        new_bucket[i] = value;
+        (&b->bucket)[h].n += 1;
+    }
 
-    new_bucket[i] = value;
-
-
-    (&b->bucket)[h].n = i+1;
     (&b->bucket)[h].size = newsize;
     free(old_bucket);
     return new_bucket;

@@ -5,7 +5,7 @@
 #old tests
 files/tests.sh
 files/structs_with_rw_locks
-
+/files_xato
 #compiled files
 files/*.o 
 files/*.a
