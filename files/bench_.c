@@ -1,7 +1,4 @@
-//#include <lfht.h>
-//#include <stdio.h>
-//#include <stdlib.h>
-//#include <pthread.h>
+#include "config.h"
 #include <time.h>
 #include <signal.h>
 #include <unistd.h>
@@ -10,7 +7,6 @@
 #include <assert.h>
 #endif
 
-#include "config.h"
 
 #define GOLD_RATIO 11400714819323198485ULL
 #define LRAND_MAX (1ULL<<31)
@@ -24,14 +20,10 @@ size_t	limit_sf,
 int test_size,
     n_threads;
 
+int START_BENCH = 0;
+
 support* entry ;
 
-// void timeout_handler(int signum) {
-// 	//printf("Timeout Exceeded \n");
-// 	//pthread_exit((void *)-1);
-// 	//printf("Timeout Exceeded %lu \n", entry->header.thread_id);
-//     pthread_exit(NULL);
-// }
 
 void *prepare_worker(void *entry_point)
 {
@@ -46,10 +38,9 @@ void *prepare_worker(void *entry_point)
 		value = rng * GOLD_RATIO;
 
 		if(rng < limit_r)
-            // 		 ht, key, value, id_ptr, elem, instruction...
-			main_hash(entry,value,thread_id);
+        	main_hash(entry,value,thread_id); 	//ht, key, value, id_ptr, elem, instruction...
 	}
-	//lfht_end_thread(head, thread_id);
+
 	return NULL;
 }
 
@@ -59,6 +50,8 @@ void *bench_worker(void *entry_point)
 	int thread_limit = test_size/n_threads;
 
 	int64_t thread_id = get_thread_id(entry);
+
+	while(!START_BENCH){};
 
 	for(int i=0; i<thread_limit; i++){
 		size_t	rng,
@@ -79,7 +72,7 @@ void *bench_worker(void *entry_point)
 				
 				assert(res==1);
 			#else
-						search(entry,value,thread_id);
+				search(entry,value,thread_id);
 			#endif
 		}
 		else if(rng < limit_r){
@@ -98,9 +91,16 @@ void *bench_worker(void *entry_point)
 				search(entry,value,thread_id);
 			#endif
 		}
-		entry->header.insert_count[thread_id].all_ops++;
+		
+		if(START_BENCH) {
+			entry->header.insert_count[thread_id].all_ops++;
+		}
+		else {
+			return NULL;
+		}
+		
 	}
-	//lfht_end_thread(head, thread_id);
+
 	return NULL;
 }
 
@@ -118,7 +118,6 @@ void *test_worker(void *entry_point)
 		value = rng * GOLD_RATIO;
 		if(rng < limit_sf){
 			//hit
-			//assert(search(entry->ht,value,thread_id)==1);
 
 			assert(search(entry,value,thread_id)==1);
 		}
@@ -135,22 +134,12 @@ void *test_worker(void *entry_point)
 			assert(search(entry,value,thread_id)==0);
 		}
 	}
-	//lfht_end_thread(head, thread_id);
+
 	return NULL;
 }
 #endif
 
-
-// void *execute_with_timeout(void *entry_point) {
-//     signal(SIGALRM, timeout_handler);
-//     alarm(1);
-//     bench_worker(entry_point);
-//     alarm(0);  // Cancel the alarm if the function completes before timeout
-// 	return NULL;
-// }
-
 //if all inserts
-
 void stats() {
 
 	hashtable* ht = entry->ht;
@@ -173,7 +162,7 @@ void stats() {
 	}
 
 	for(int64_t i=1; i<n_threads+1; i++) {
-		//printf("Thread %llu : Inserted %llu items - Last Known Hashtable: %d \n",i,entry->header.insert_count[i].count,entry->header.insert_count[i].header);	
+
 		if(entry->header.insert_count[i].header == entry->ht->header.n_buckets) {
 			total_elements += entry->header.insert_count[i].count;
 		}
@@ -214,7 +203,7 @@ void stats() {
 
 		for(int64_t i=0; i<table_size; i++) {
 			aux = bucket_size((&ht->bucket)[i].first,ht);
-			//printf("bucket: %lu aux: %lu \n",i,aux);
+
 			moda[aux] += 1;
 			if (aux > 0) {
 				if(aux > max_size) {
@@ -250,20 +239,14 @@ void stats() {
 	}
 
 	printf("Hashtable size: %ld\n", table_size);
+	printf("Load Factor: %lf\n",(float)list_size/(float)table_size);
 	printf("Elements Recorded: %ld\n", recorded_elements);
 	printf("Elements Total: %ld\n", total_elements);
 	printf("Elements Actual: %ld\n",list_size);
-	printf("Largest Element Size: %ld\n",max_size);
-	printf("Smallest Element Size: %ld\n",min_size);
+	printf("Most Elements in Chain: %ld\n",max_size); //alterar no script e no python, Largest e Smallest Element Size
+	printf("Least Elements in Chain: %ld\n",min_size); //alterar no script e no python, Largest e Smallest Element Size
 
-	if(min_size < INT32_MAX) {
-		printf("Smallest Element Size: %ld\n",min_size);
-	}
-	else {
-		printf("Smallest Element Size: 0\n",min_size);
-	}
-
-	printf("Load Factor: %lf\n",(float)list_size/(float)table_size);
+	
 	printf("Largest Bucket Size: %ld\n",max_exp);
 
 	if(min_exp < INT32_MAX) {	
@@ -273,18 +256,17 @@ void stats() {
 		printf("Smallest Bucket Size: 0\n");
 	}
 
-	printf("# Buckets at Largest Size: %ld\n",moda[max_size]);
+	printf("# Chains at Largest Size: %ld\n",moda[max_size]);
 	
 	if(min_size < INT32_MAX) {
-		printf("# Buckets at Smallest Size: %ld\n",moda[min_size] + moda[0]);	
+		printf("# Chains at Smallest Size: %ld\n",moda[min_size] + moda[0]);	
 	}
 	else {
-		printf("# Buckets at Smallest Size: %ld\n",moda[0]);	
+		printf("# Chains at Smallest Size: %ld\n",moda[0]);	
 	}
 	
 	printf("Average Bucket Size: %lf\n", (float)exp_size/(float)table_size);
-	printf("Header Access Total: %ld\n",header_access);
-	printf("Header Access Average: %lf\n",(float)header_access/(float)n_threads);
+
 }
 
 
@@ -294,20 +276,20 @@ int main(int argc, char **argv)
 		printf("usage: bench <threads> <nodes> <inserts> <removes> <searches found> <searches not found>\n");
 		return -1;
 	}
-	
+
 	printf("preparing data.\n");
-	
+
 	n_threads = atoi(argv[1]);
-	test_size = atoi(argv[2]);
+	test_size = atoi(argv[2]); 
+
 	
-	size_t	inserts = atoi(argv[3]),
-	    	removes = atoi(argv[4]),
+	size_t	inserts =  atoi(argv[3]),
+	    	removes =  atoi(argv[4]),
 	    	searches_found = atoi(argv[5]),
-	    	searches_not_found = atoi(argv[6]),
+	    	searches_not_found =  atoi(argv[6]),
 	    	total = inserts + removes + searches_found + searches_not_found;
 	
-			limit_sf = LRAND_MAX*searches_found/total;
-	
+	limit_sf = LRAND_MAX*searches_found/total;	
 	limit_r = limit_sf + LRAND_MAX*removes/total;
 	limit_i = limit_r + LRAND_MAX*inserts/total;
 	
@@ -337,32 +319,59 @@ int main(int argc, char **argv)
 		}
 	}
 	
-	printf("starting test\n");
-	entry->header.thread_id = (int64_t)1;
-	
-	clock_gettime(CLOCK_MONOTONIC_RAW, &start_monoraw);
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_process);
-	
+		
+	//"Ana porque é que puseste aqui uma função? " Pq se fizer só reset aos ids, o compilador ignora-me. (ノ-_-)ノ ミ ┴┴ 1 HORA NISTO --- confirma-se que eram optimizações da flag -O3
+	//entry->header.thread_id = (int64_t)1;
+	reset_id_counter(entry);
+
 	for(int64_t i=0; i<n_threads; i++){
 		srand48_r(i, seed[i]);
 		pthread_create(&threads[i], NULL, bench_worker, seed[i]);
 	}
+	
+	while (entry->header.thread_id < n_threads+1) {};
 
-	#if TIMED 
-		printf("Main Thread waiting for Threads \n");
-		sleep(1);
-		for(int64_t i=0; i<n_threads; i++)
-			pthread_cancel(threads[i]);
-		printf("Threads done \n");
+	#ifdef SETUP
+		return 0;
+	#endif
+	printf("starting test\n");
+
+	clock_gettime(CLOCK_MONOTONIC_RAW, &start_monoraw);
+	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start_process);
+	
+	//se usar as optimizações este START_BENCH não é actualizado
+	START_BENCH=1;
+
+	#if TIMED
+
+		int64_t maxops = test_size/n_threads-1;
+		int64_t j = 1;
+		//wait for first thread to finish.  
+		while(entry->header.insert_count[j].all_ops<maxops) {
+			j++;
+			if(j>n_threads) { 
+				j=1;
+			}
+		}
+
+		//kill all threads when 1st thread finishes
+		START_BENCH = 0;
+
+		clock_gettime(CLOCK_MONOTONIC_RAW, &end_monoraw);
+		clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_process);
+		
+		for(int64_t i=0; i<n_threads; i++) {
+			pthread_join(threads[i], NULL);
+		}
+		
 	#else
 		for(int64_t i=0; i<n_threads; i++)
 			pthread_join(threads[i], NULL);
 	#endif 
-
-	clock_gettime(CLOCK_MONOTONIC_RAW, &end_monoraw);
-	clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &end_process);
 	
+	double real_time;
 	time = end_monoraw.tv_sec - start_monoraw.tv_sec + ((end_monoraw.tv_nsec - start_monoraw.tv_nsec)/1000000000.0);
+	real_time = time;
 	printf("Real time: %lf\n", time);
 	
 	time = end_process.tv_sec - start_process.tv_sec + ((end_process.tv_nsec - start_process.tv_nsec)/1000000000.0);
@@ -375,16 +384,16 @@ int main(int argc, char **argv)
 	}
 	printf("Total Operations: %ld\n",total_ops);
 
+	printf("Ops per Second: %lf\n",total_ops/real_time);
+
 	#if !TIMED
-	if(inserts == 100) {
-		stats();
-	}
+		if(inserts == 100) {
+			stats();
+		}
 	#endif
-	//imprimir_hash(entry->ht);
 
 #if DEBUG
-
-	entry->header.thread_id = (int64_t)1;
+	reset_id_counter(entry);
 
 	for(int64_t i=0; i<n_threads; i++){
 		srand48_r(i, seed[i]);
@@ -395,5 +404,6 @@ int main(int argc, char **argv)
 	}
 	printf("Correct!\n");
 #endif
+
 	return 0;
 }

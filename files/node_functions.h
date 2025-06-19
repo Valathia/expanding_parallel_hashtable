@@ -47,7 +47,7 @@ void imprimir_node( node *first, hashtable* b, FILE* f){
         size_t* vec =(size_t*)malloc(sizeof(size_t)*n);
         int64_t size = 1;
         vec[0] = first->value;
-        for(p=first->next; p!=(void*)b && !is_bucket_array(p) ;p=p->next){
+        for(p=first->next; p!=(void*)b && !IsHashRef(p) ;p=p->next){
             insert_sort(vec,p->value,size);
             size++;
         }
@@ -61,10 +61,10 @@ void imprimir_node( node *first, hashtable* b, FILE* f){
 //imprime a hashtable
 void imprimir_hash(hashtable* ht, FILE* f) {
 
-    fprintf(f,"-------- HASHTABLE %lld --------\n",ht->header.n_buckets);
+    fprintf(f,"-------- HASHTABLE %ld --------\n",ht->header.n_buckets);
     for(int64_t i=0;i<ht->header.n_buckets;i++) {
         
-        fprintf(f,"index : %lld\n",i);
+        fprintf(f,"index : %ld\n",i);
         fprintf(f,"---------------------------\n");
 
         imprimir_node((&ht->bucket)[i].first,ht,f);
@@ -72,7 +72,7 @@ void imprimir_hash(hashtable* ht, FILE* f) {
         fprintf(f,"---------------------------\n");
     }
 
-    fprintf(f,"n elem: %lld\n", ht->header.n_ele);
+    fprintf(f,"n elem: %ld\n", ht->header.n_ele);
     fprintf(f,"\n");
 
 }
@@ -90,21 +90,15 @@ node *inst_node(size_t k, hashtable* b){
 };
 
 
-//função que verifica se o bucket está a apontar para uma hastable nova 
-// size_t is_bucket_array(node* first) {
-//     return (uint64_t)first&1;
-// }
-
-
 //conta quantos nodes tem num "bucket"
 int64_t bucket_size(node *first, hashtable* b) {
-    if(first==(void*)b || is_bucket_array(first)) {
+    if(first==(void*)b || IsHashRef(first)) {
         return 0;
     }
 
     int64_t i = 0;
     node* p = NULL;
-    for(p=first; p!=(void*)b && !is_bucket_array(p) ;p=p->next) {
+    for(p=first; p!=(void*)b && !IsHashRef(p) ;p=p->next) {
         i++;
     }
     return i;
@@ -137,12 +131,11 @@ hashtable* create_table(int64_t s) {
 
 void adjustNodes(node* n, hashtable* b,hashtable* old, support* entry, int64_t id_ptr) {
 
-    if (n != (void*)old && !is_bucket_array(n)) { 
-        node* chain = n->next;
-        if ( chain != (void*)old && chain != (void*)b && !is_bucket_array(chain)) {
-            adjustNodes(chain,b,old,entry,id_ptr);
-        }
-        
+    if (n != (void*)old) {
+        adjustNodes(n->next,b,old,entry,id_ptr);
+        //node* chain = n->next;
+        //if ( chain != (void*)old && chain != (void*)b && !IsHashRef(chain)) {
+        //}
         insert(b,entry,n,id_ptr);
         return;
     }
@@ -153,44 +146,51 @@ void adjustNodes(node* n, hashtable* b,hashtable* old, support* entry, int64_t i
 // o 1º modelo faz algumas verificações desnecessárias para expansões concorrentes 
 // mas não altera o comportamento para os modelos sem co-op
 hashtable* HashExpansion(hashtable* b,  support* entry , int64_t id_ptr) {
-    hashtable* oldB = b;
-    int64_t oldK = b->header.n_buckets;
-    int64_t newK = 2*oldK;
-    hashtable* newB = create_table(newK);
+    hashtable* oldH = b;
+    int64_t oldS = b->header.n_buckets;
+    int64_t newS = 2*oldS;
+    hashtable* newB = create_table(2*oldS);
     int64_t i=0;
     node* node_mask = Mask(newB);
 
-
     //update thread counter for new header BEFORE starting
-    entry->header.insert_count[id_ptr].header = newK;
+    entry->header.insert_count[id_ptr].header = newS;
     entry->header.insert_count[id_ptr].count = 0;
     entry->header.insert_count[id_ptr].ops = 0;
-    entry->header.insert_count[id_ptr].expansion_at_bucket = 0;
     
-    while (i < oldK) {
+    while (i < oldS) {
 
-        if(!is_bucket_array((&oldB->bucket)[i].first)) {
+        if(!IsHashRef((&oldH->bucket)[i].first)) {
 
-            WRITE_LOCK(&((&oldB->bucket)[i].lock_b));
-            
-            if ((&oldB->bucket)[i].first != (void*)b) { //&& (&oldB->bucket)[i].first != node_mask
-                
-                adjustNodes((&oldB->bucket)[i].first,newB,oldB,entry,id_ptr);
-                
+            WRITE_LOCK(&((&oldH->bucket)[i].lock_b));
+            // -> vazio  -> não precisa expandir -> precisa de mask
+            // -> pode ja ter sido expandido -> não precisa expandir -> não precisa de mask
+            if (!IsHashRef((&oldH->bucket)[i].first)) {
+                adjustNodes((&oldH->bucket)[i].first,newB,oldH,entry,id_ptr);
+                (&oldH->bucket)[i].first = node_mask;
             }  
 
-            //resheck bucket for double expansion, just to be safe
-            if(!is_bucket_array((&oldB->bucket)[i].first)) {
-                (&oldB->bucket)[i].first = node_mask;
-            }
-
-            UNLOCK(&((&oldB->bucket)[i].lock_b));
+            UNLOCK(&((&oldH->bucket)[i].lock_b));
         }
-        entry->header.insert_count[id_ptr].expansion_at_bucket++;
         i++;
     }
 
     return newB;
+}
+
+hashtable* find_bucket_search(hashtable* b,size_t value) {
+    size_t h = Hash(value,b->header.n_buckets);
+
+    //if bucket is pointing towards a new table, keep going until we find the bucket of the current hashtable
+    while(IsHashRef((&b->bucket)[h].first)) {
+
+        b = Unmask((&b->bucket)[h].first);
+
+        h = Hash(value,b->header.n_buckets);
+
+    }
+
+    return b;
 }
 
 
@@ -201,17 +201,15 @@ hashtable* find_bucket(hashtable* b,size_t value) {
     WRITE_LOCK(bucket_lock);
 
     //if bucket is pointing towards a new table, keep going until we find the bucket of the current hashtable
-    while(is_bucket_array((&b->bucket)[h].first)) {
+    while(IsHashRef((&b->bucket)[h].first)) {
 
         b = Unmask((&b->bucket)[h].first);
 
         h = Hash(value,b->header.n_buckets);
 
-        //old = bucket_lock;
         UNLOCK(bucket_lock);
         bucket_lock = &(&b->bucket)[h].lock_b;
         WRITE_LOCK(bucket_lock);
-        //UNLOCK(old);  
     }
 
     return b;

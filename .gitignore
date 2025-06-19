@@ -6,9 +6,13 @@
 files/tests.sh
 files/structs_with_rw_locks
 /files_xato
+/files_kubanakan
+/old_github_files
+
 #compiled files
 files/*.o 
 files/*.a
+files_kubanakan.zip
 
 #tests
 tests

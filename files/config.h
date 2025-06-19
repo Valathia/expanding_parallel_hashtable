@@ -4,18 +4,17 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <jemalloc/jemalloc.h>
 
-//Isto está especifico aos pcs onde está a ser testado: 1º onde o jemalloc está no macbook com homebrew
-//                                                      2º onde o jemalloc está instalado na sibila2
-#ifdef __APPLE__
-	#include "../../../../opt/homebrew/Cellar/jemalloc/5.3.0/include/jemalloc/jemalloc.h"
-#else 
-	#include "../cenas_instaladas/include/jemalloc/jemalloc.h"
-#endif
+#if !defined(TRESH) 
+    #define TRESH 2
+#endif 
 
-#define TRESH 2
+#if !defined(RATIO)
+    #define RATIO 1
+#endif 
 
-#define ARRAY_INIT_SIZE 8
+#define ARRAY_INIT_SIZE 4
 
 #define CACHE_LINE 64
 
@@ -23,12 +22,15 @@
 
 #define MAXTHREADS 32
 
+
 #define Hash(v,n) (v&(n-(size_t)1))                                 // x % n == x & n-1 --- só funciona porque os nr de buckets é uma potência de base 2
-#define is_bucket_array(f) ((uint64_t)f&1)                          //função que verifica se o bucket está a apontar para uma hastable nova é 1 se estiver a apontar para uma HT nova
+#define IsHashRef(f) ((uint64_t)f&1)                                //função que verifica se o bucket está a apontar para uma hastable nova é 1 se estiver a apontar para uma HT nova
 #define Mask(ht) ((void*)(uint64_t*)((uint64_t)ht | (uint64_t)1))
 #define Unmask(pt) ((void *)((uint64_t)pt & ~(uint64_t)(1<<0))) 
+#define Cond1(chain) (chain>TRESH)
+#define Cond2(elem,buckets) (elem>RATIO*buckets)
 
-//isto está desactualizado e eventialmente pode ser removido para ser só o Mutex
+//isto está desactualizado e eventualmente pode ser removido para ser só o Mutex
 #ifdef MUTEX
     #define LOCKS pthread_mutex_t
     #define LOCK_INIT pthread_mutex_init
@@ -64,8 +66,6 @@
     }BUCKET;
 #endif
 
-
-
 typedef struct hash_header {
     LOCKS lock;
     int64_t mode;
@@ -79,12 +79,10 @@ typedef struct __attribute__((aligned(64))) hashtable {
 }hashtable;
 
 typedef struct __attribute__ ((aligned(64))) counter {
-    int64_t ops;
-    int64_t count;
-    int64_t header; //n_buckets para identificar o header, não há 2 headers com o mesmo nr de buckets
-    int64_t ht_header_lock_count;
-    int64_t expansion_at_bucket;
-    int64_t all_ops;
+    int64_t ops;                    // quantas operaçõesa de insert/delete a thread fez 
+    int64_t count;                  // valor a somar ao Header da HT ao fim de 1000 ops. (+1 por Insert, -1 por Delete)
+    int64_t header;                 // n_buckets para identificar o header, não há 2 headers com o mesmo nr de buckets
+    int64_t all_ops;                // # total de operações que a thread faz 
 }counter;
 
 //spacing so hopefully the lock for the ht pointer is separated from the header
@@ -110,6 +108,7 @@ int64_t main_hash(support* entry,size_t value, int64_t id_ptr);
 int64_t search(support* entry,size_t value, int64_t id_ptr);
 int64_t delete(support* entry,size_t value, int64_t id_ptr);
 int64_t get_thread_id(support* entry);
+void reset_id_counter(support* entry);
 void imprimir_hash(hashtable* ht, FILE* f);
 
 #ifdef ARRAY
@@ -121,6 +120,6 @@ void imprimir_hash(hashtable* ht, FILE* f);
 //---------------------------------------------------------------------------------------------------------------
 
 // condição de expansão actual:
-//  #nodes_total > #buckets && #nodes_num_bucket > threshhold
+//  #nodes_total > RATIO*#buckets && #nodes_num_bucket > threshhold
 
 //---------------------------------------------------------------------------------------------------------------

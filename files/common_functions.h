@@ -11,12 +11,9 @@ support* create_acess(int64_t s, int64_t n_threads) {
     LOCK_INIT( &entry->lock,NULL);
 
     for(int64_t i=1; i<n_threads+1; i++) {
-        //printf("header counter %ld : %p = 0 \n",i, &entry->header.insert_count[i]);
         entry->header.insert_count[i].count = 0;
         entry->header.insert_count[i].ops = 0;
         entry->header.insert_count[i].header = s;
-        entry->header.insert_count[i].ht_header_lock_count = 0;
-        entry->header.insert_count[i].expansion_at_bucket = 0;
         entry->header.insert_count[i].all_ops = 0;
     }
 
@@ -37,6 +34,9 @@ int64_t get_thread_id(support* entry_point) {
     return thread_id;
 }
 
+void reset_id_counter(support* entry) {
+    entry->header.thread_id = 1;
+};
 
 //update header_counter with trylock
 int64_t header_update(support* entry, hashtable* b, int64_t count, int64_t id_ptr) {
@@ -47,7 +47,7 @@ int64_t header_update(support* entry, hashtable* b, int64_t count, int64_t id_pt
 
         //only lock if header is the same and has not begin expanding
         if (!TRY_LOCK(&b->header.lock)) {
-            entry->header.insert_count[id_ptr].ht_header_lock_count++;
+            //entry->header.insert_count[id_ptr].ht_header_lock_count++;
 
             //recheck for expansion after gaining lock
             if (!(b->header.mode)) {
