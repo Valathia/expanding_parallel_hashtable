@@ -133,9 +133,6 @@ void adjustNodes(node* n, hashtable* b,hashtable* old, support* entry, int64_t i
 
     if (n != (void*)old) {
         adjustNodes(n->next,b,old,entry,id_ptr);
-        //node* chain = n->next;
-        //if ( chain != (void*)old && chain != (void*)b && !IsHashRef(chain)) {
-        //}
         insert(b,entry,n,id_ptr);
         return;
     }

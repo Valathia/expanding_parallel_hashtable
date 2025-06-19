@@ -10,8 +10,8 @@
     #define TRESH 2
 #endif 
 
-#if !defined(RATIO)
-    #define RATIO 1
+#if !defined(LOADFACTOR)
+    #define LOADFACTOR 1
 #endif 
 
 #define ARRAY_INIT_SIZE 4
@@ -28,7 +28,7 @@
 #define Mask(ht) ((void*)(uint64_t*)((uint64_t)ht | (uint64_t)1))
 #define Unmask(pt) ((void *)((uint64_t)pt & ~(uint64_t)(1<<0))) 
 #define Cond1(chain) (chain>TRESH)
-#define Cond2(elem,buckets) (elem>RATIO*buckets)
+#define Cond2(elem,buckets) (elem>LOADFACTOR*buckets)
 
 //isto está desactualizado e eventualmente pode ser removido para ser só o Mutex
 #ifdef MUTEX
@@ -120,6 +120,6 @@ void imprimir_hash(hashtable* ht, FILE* f);
 //---------------------------------------------------------------------------------------------------------------
 
 // condição de expansão actual:
-//  #nodes_total > RATIO*#buckets && #nodes_num_bucket > threshhold
+//  #nodes_total > LOADFACTOR*#buckets && #nodes_num_bucket > threshhold
 
 //---------------------------------------------------------------------------------------------------------------

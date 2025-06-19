@@ -1,36 +1,28 @@
 ##Run
 
 to run:
-./run.sh N_TEST N_ELEM STRUCT
+./energy_tests.sh N_TESTS VERSION N_ELEM THRESH
 
-opt flags: -l -j
-
--l : activates mutex lock (otherwise read/write lock)
-
--j : substitutes malloc with jemalloc in runtime using LD-PRELOAD
+opt flags: -d
 
 -d : activates debug mode for bench
 
-N_TEST: Nº of tests per Thread Nº. 
+N_TEST: Nº of tests per Thread Nº per Test Type
+VERSION: "list","array"
+N_ELEM: How many operations per Test 
+THRESH: LoadFactor+1 (usually 4 or 6)
 
-Ex: ./run.sh -l 10 1000 a
+THREADS=(1 2 4 8 12 16 20)
+Tests: 100% searches, 100% inserts, 100% deletes, 10% I/R | 80% Seaches, 20% I/R | 60% Searches, 30% I/R | 60% Seaches 
 
-will run Mutex Locks, and will do 10 tests per each Nº of Threads in use (1,2,3,...,32), using struct a.
+Ex: ./energy_tests.sh 10 list 8388608 6
 
-this equates to: 10 all inserts, 10 all deletes, 10 all hits , 10 all misses and 10 mixed ratio tests. per each Thread count. and work with 1000 elements per test.
+will run list struct, 10 tests per each Nº of Threads in use (1 2 4 8 12 16 20) with a Threshold of 6 and LoadFactor of 5, per Test type.
+
+this equates to: 10 tests per each Thread count. and work with 8388608 elements/operations per test, which produces 6 csv files, one per Test type. (It's actually 18 files, each full test produces 3 csv's)
 
 ###Structs:
 
-- a: Default Expandable Hashtable w/ Nodes
+- array: Concurrent Expandable Hashtable with Arrays at Bucket Level, Closed Addressing, Dellayed Header Updates, Co-Op Expansion, Locks at bucket level
 
-- b: Expandable Hashtable w/ Nodes & Delayed Updates
-
-- c: Expandable Hashtable w/ Nodes & Delayed Updates & Lazy-Coop Expansion
-
-- d: Expandable Hashtable w/ Nodes & Delayed Updates & Full-Coop Expansion (not stable)
-
-- e: Expandable Hashtable w/ Unordered Arrays & Delayed Updates
-
-- f: Expandable Hashtable w/ Unordered Arrays & Delayed Updates & Lazy-Coop Expansion
-
-- g: Expandable Hashtable w/ Unordered Arrays & Delayed Updates & Full-Coop Expansion (not stable)
+- list: Concurrent Expandable Hashtable with Nodes at Bucket Level, Closed Addressing, Delayed Header Updates, Co-Op Expansion, Locks at bucket level

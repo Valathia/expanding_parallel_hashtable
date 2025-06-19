@@ -8,7 +8,7 @@
 #endif
 
 
-#define GOLD_RATIO 11400714819323198485ULL
+#define GOLD_LOADFACTOR 11400714819323198485ULL
 #define LRAND_MAX (1ULL<<31)
 #define INIT_SIZE 16384		// (2^14) initial size of hashtable to avoid thread colision -- must be base 2 for hashing
 
@@ -35,7 +35,7 @@ void *prepare_worker(void *entry_point)
                 value;
 
 				lrand48_r(entry_point, (long int *) &rng);
-		value = rng * GOLD_RATIO;
+		value = rng * GOLD_LOADFACTOR;
 
 		if(rng < limit_r)
         	main_hash(entry,value,thread_id); 	//ht, key, value, id_ptr, elem, instruction...
@@ -57,7 +57,7 @@ void *bench_worker(void *entry_point)
 		size_t	rng,
 		    	value;
 		lrand48_r(entry_point, (long int *) &rng);
-		value = rng * GOLD_RATIO;
+		value = rng * GOLD_LOADFACTOR;
 
 		if(rng < limit_sf){
 			//search find
@@ -115,7 +115,7 @@ void *test_worker(void *entry_point)
 		size_t	rng, value;
 
 		lrand48_r(entry_point, (long int *) &rng);
-		value = rng * GOLD_RATIO;
+		value = rng * GOLD_LOADFACTOR;
 		if(rng < limit_sf){
 			//hit
 
@@ -154,7 +154,6 @@ void stats() {
 	int64_t min_exp = INT32_MAX;
 	int64_t max_exp = 0;
 	int64_t exp_size = 0;
-	int64_t header_access = 0;
 	//n_elementos
 	int64_t moda[128];
 	for(int64_t i=0; i<128;i++) {
@@ -166,7 +165,6 @@ void stats() {
 		if(entry->header.insert_count[i].header == entry->ht->header.n_buckets) {
 			total_elements += entry->header.insert_count[i].count;
 		}
-		header_access += entry->header.insert_count[i].ht_header_lock_count;
 	}
 	
 	#ifdef ARRAY
