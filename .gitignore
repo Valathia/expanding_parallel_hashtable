@@ -23,6 +23,7 @@ old_test_bench
 decomissioned structs
 files/clean_tests.sh 
 files/test_*
+files/run_tests.sh
 small_tests
 files/run_base.sh
 sibila_array_addresses.txt
